@@ -51,18 +51,20 @@ const saveChanges = () => {
     closeModal();
 };
 
-// Watch promptText changes -> update tags
-watch(promptText, (newText) => {
-    tags.value = textToTags(newText);
-});
-
-// Watch tags changes -> update promptText
-watch(tags, (newTags) => {
+// Handle updates from VisualTagArea
+const handleTagsUpdate = (newTags: TagItem[]) => {
+    tags.value = newTags;
+    // Only update text when tags are modified via UI (not typing)
     const newText = tagsToText(newTags);
     if (newText !== promptText.value) {
         promptText.value = newText;
     }
-}, { deep: true });
+};
+
+// Watch promptText changes -> update tags
+watch(promptText, (newText) => {
+    tags.value = textToTags(newText);
+});
 </script>
 
 <template>
@@ -88,7 +90,7 @@ watch(tags, (newTags) => {
                 
                 <!-- Right Pane: Visual Tag Area -->
                 <div style="flex: 1; min-width: 300px;">
-                    <VisualTagArea :tags="tags" @update:tags="tags = $event" />
+                    <VisualTagArea :tags="tags" @update:tags="handleTagsUpdate" />
                 </div>
             </div>
         </template>
