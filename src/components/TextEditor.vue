@@ -32,8 +32,71 @@ const tags = ref<TagItem[]>([]);
 const splitPercentage = ref(60); 
 const isResizing = ref(false);
 
+// Category Caching & Fetching
+const categoryCache = ref<Record<string, number>>({});
+const fetchQueue = new Set<string>();
+let fetchTimeout: any = null;
+
+const scheduleFetch = () => {
+    if (fetchTimeout) clearTimeout(fetchTimeout);
+    fetchTimeout = setTimeout(async () => {
+        const names = Array.from(fetchQueue);
+        fetchQueue.clear();
+        
+        if (names.length === 0) return;
+        
+        try {
+            const db = DuckDBService.getInstance();
+            const results = await db.getTagsDetails(names);
+            
+            // Update cache with found results
+            Object.entries(results).forEach(([name, cat]) => {
+                 categoryCache.value[name.toLowerCase()] = cat; 
+            });
+            
+            // Mark not found tags as General to prevent re-fetching
+            names.forEach(name => {
+                const lower = name.toLowerCase();
+                if (categoryCache.value[lower] === undefined) {
+                    categoryCache.value[lower] = 0; // General
+                }
+            });
+            
+            // Re-apply to current tags
+            // We create a new array to ensure reactivity triggers in VisualTagArea
+            tags.value = tags.value.map(tag => {
+                 const lower = tag.text.toLowerCase();
+                 if (categoryCache.value[lower] !== undefined) {
+                     return { ...tag, category: categoryCache.value[lower] };
+                 }
+                 return tag;
+            });
+        } catch (e) {
+            console.error("Error fetching tag categories:", e);
+        }
+    }, 1000); // 1s debounce to avoid spamming while typing
+};
+
+const enrichTags = (rawTags: TagItem[]) => {
+    rawTags.forEach(tag => {
+        const lowerText = tag.text.toLowerCase();
+        if (categoryCache.value[lowerText] !== undefined) {
+             tag.category = categoryCache.value[lowerText];
+        } else {
+             // Only fetch if not already scheduled? Set de-dupes.
+             fetchQueue.add(tag.text);
+        }
+    });
+    
+    if (fetchQueue.size > 0) {
+        scheduleFetch();
+    }
+    
+    return rawTags;
+};
+
 // Initialize tags
-tags.value = textToTags(localValue.value);
+tags.value = enrichTags(textToTags(localValue.value));
 
 // Autocomplete State
 const showAutocomplete = ref(false);
@@ -51,7 +114,7 @@ const showSearchModal = ref(false);
 watch(() => props.modelValue, (newValue) => {
     if (newValue !== localValue.value) {
         localValue.value = newValue;
-        tags.value = textToTags(newValue);
+        tags.value = enrichTags(textToTags(newValue));
     }
 });
 
@@ -62,7 +125,7 @@ const handleInput = (e: Event) => {
     emit('update:modelValue', target.value);
     
     // Update tags from text
-    tags.value = textToTags(target.value);
+    tags.value = enrichTags(textToTags(target.value));
 
     // Trigger autocomplete logic
     checkAutocomplete(target);
@@ -216,9 +279,19 @@ const selectItem = (item: any) => {
     // Get tag name and apply settings
     let tagName = item.name;
     
+    // Cache the category from the selected item
+    if (item.category !== undefined) {
+        categoryCache.value[tagName.toLowerCase()] = item.category;
+        // Also cache alias if matched? 
+    }
+
     // Apply text formatting settings
     if (settings.convertUnderscoreToSpace) {
         tagName = tagName.replace(/_/g, ' ');
+        // If we converted space, we should cache the spaced version too for the parser
+        if (item.category !== undefined) {
+             categoryCache.value[tagName.toLowerCase()] = item.category;
+        }
     }
     
     if (settings.escapeBrackets) {
@@ -240,8 +313,8 @@ const selectItem = (item: any) => {
     localValue.value = newText;
     emit('update:modelValue', newText);
     
-    // Update tags
-    tags.value = textToTags(newText);
+    // Update tags with enrichment
+    tags.value = enrichTags(textToTags(newText));
     
     showAutocomplete.value = false;
     
@@ -272,8 +345,13 @@ const handleAddTag = (tagName: string, category: number) => {
     // Apply text formatting settings
     let formattedTagName = tagName;
     
+    // Cache the category
+    categoryCache.value[tagName.toLowerCase()] = category;
+    
     if (settings.convertUnderscoreToSpace) {
         formattedTagName = formattedTagName.replace(/_/g, ' ');
+        // Cache formatted version too
+        categoryCache.value[formattedTagName.toLowerCase()] = category;
     }
     
     if (settings.escapeBrackets) {

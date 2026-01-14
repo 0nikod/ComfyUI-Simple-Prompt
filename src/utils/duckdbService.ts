@@ -67,4 +67,27 @@ export class DuckDBService {
             return [];
         }
     }
+
+    public async getTagsDetails(names: string[]): Promise<Record<string, number>> {
+        if (names.length === 0) return {};
+
+        try {
+            const response = await fetch('/simple-prompt/get-tags-details', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ names })
+            });
+
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            return await response.json();
+        } catch (error) {
+            console.error("[DuckDB] Get tags details failed:", error);
+            return {};
+        }
+    }
 }
+

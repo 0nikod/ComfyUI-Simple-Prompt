@@ -177,9 +177,63 @@ def search_tags(
                 row_dict[cols[i]] = val
             results.append(row_dict)
         return results
+        return results
     except Exception as e:
         logger.error(f"Search failed: {e}")
         return []
+
+
+def get_tags_details(conn, names: List[str]) -> Dict[str, int]:
+    """
+    Get category for a list of tag names.
+    Returns a dict {name: category}
+    """
+    if not conn or not names:
+        return {}
+
+    # Cleanup names
+    clean_names = [n.strip() for n in names if n.strip()]
+    if not clean_names:
+        return {}
+
+    # We need to handle case-insensitive matching
+    # DuckDB ILIKE IN (...) is one way, or joining with a values list
+    # VALUES list is better for bulk
+
+    # Build placeholders
+    placeholders = ",".join(["?"] * len(clean_names))
+
+    # We want to match names and return their category.
+    # Since we have duplicates in views potentially (though 'tags' view handles it),
+    # we just query 'tags' view.
+    sql = f"""
+        SELECT name, category 
+        FROM tags 
+        WHERE name COLLATE NOCASE IN ({placeholders})
+    """
+
+    try:
+        # execute accepts list of params
+        res = conn.execute(sql, clean_names).fetchall()
+
+        # Build map.
+        # Note: The DB name might differ in casing from input name.
+        # But we want to map generic input to category.
+        # Ideally we map the *lowercase* version of the input to the category,
+        # so the frontend can look it up easily.
+
+        result_map = {}
+        for row in res:
+            db_name = row[0]
+            category = row[1]
+            # We map the lowercase name from DB to category
+            # Frontend should normalise lookups
+            result_map[db_name.lower()] = category
+
+        return result_map
+    except Exception as e:
+        logger.error(f"Get tags details failed: {e}")
+        return {}
 
 
 def ensure_parquet_exists(path: str, schema_sql: str):
@@ -355,6 +409,26 @@ async def search_tags_api(request):
     except Exception as e:
         logger.error(f"Search API error: {e}")
         return web.json_response([], status=500)
+
+
+@PromptServer.instance.routes.post("/simple-prompt/get-tags-details")
+async def get_tags_details_api(request):
+    conn = get_db_connection()
+    if not conn:
+        return web.json_response({"error": "DuckDB not initialized"}, status=500)
+
+    try:
+        data = await request.json()
+        names = data.get("names", [])
+
+        if not names:
+            return web.json_response({})
+
+        results = get_tags_details(conn, names)
+        return web.json_response(results)
+    except Exception as e:
+        logger.error(f"Get tags details API error: {e}")
+        return web.json_response({"error": str(e)}, status=500)
 
 
 @PromptServer.instance.routes.post("/simple-prompt/add-custom-tag")
