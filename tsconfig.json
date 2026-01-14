@@ -5,9 +5,18 @@
     "module": "ESNext",
     "resolveJsonModule": true,
     "paths": {
-      "@/*": ["./src/*"]
+      "@/*": [
+        "./src/*"
+      ]
     },
-    "typeRoots": ["src/types", "node_modules/@types"]
+    "typeRoots": [
+      "src/types",
+      "node_modules/@types"
+    ]
   },
-  "exclude": ["node_modules", "dist", "js"]
+  "exclude": [
+    "node_modules",
+    "dist",
+    "js"
+  ]
 }
