@@ -77,29 +77,47 @@ export class DuckDBService {
         }
     }
 
-    public async searchTags(query: string, limit: number = 20): Promise<any[]> {
+    public async searchTags(query: string, limit: number = 20, useAliases: boolean = false): Promise<any[]> {
         if (!this.conn) return [];
 
         // Sanitize query to prevent basic injection (though this is WASM client-side)
         const safeQuery = query.replace(/'/g, "''");
 
+        let aliasClause = '';
+        if (useAliases) {
+            // Assuming alias column is a list of strings
+            aliasClause = `OR list_contains(alias, '${safeQuery}')`;
+        }
+
+        // Optimized query: No ORDER BY, relying on pre-sorted parquet (by post_count DESC)
+        // We just need to filter by name (infix match) or alias
         const sql = `
             SELECT * FROM tags
-            WHERE name ILIKE '%${safeQuery}%'
-            ORDER BY
-              CASE 
-                WHEN name = '${safeQuery}' THEN 3 
-                WHEN name ILIKE '${safeQuery}%' THEN 2 
-                ELSE 1 
-              END DESC,
-              post_count DESC
+            WHERE name ILIKE '%${safeQuery}%' ${aliasClause}
             LIMIT ${limit}
         `;
 
         try {
             const table = await this.conn.query(sql);
             const results = table.toArray().map(row => row.toJSON());
-            console.log(`[DuckDB] Search for "${safeQuery}" returned ${results.length} results`);
+            // console.log(`[DuckDB] Search for "${safeQuery}" returned ${results.length} results`);
+
+            // Mark results that matched by alias if needed
+            if (useAliases) {
+                return results.map(row => {
+                    const matchedAlias = row.alias && row.alias.includes(safeQuery) ? safeQuery : null; // Simple check
+                    // More complex check might be needed if exact match logic matters, 
+                    // but for now just returning the row is enough. 
+                    // The UI handles showing alias if needed (optional)
+                    if (matchedAlias) {
+                        // duckdb-wasm result objects might be read-only or special types
+                        // safe to spread?
+                        return { ...row, alias_match: 'alias' };
+                    }
+                    return row;
+                });
+            }
+
             return results;
         } catch (error) {
             console.error("[DuckDB] Search failed:", error);

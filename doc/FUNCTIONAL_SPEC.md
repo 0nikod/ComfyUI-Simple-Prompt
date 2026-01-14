@@ -91,16 +91,12 @@
     *   **SQL 模板**:
         ```sql
         SELECT * FROM tags.parquet
-        WHERE (name ILIKE '%{query}%' {OR_ALIAS_CLAUSE})
-        ORDER BY
-          CASE WHEN name = '{query}' THEN 3          -- 完全匹配名称优先
-          WHEN list_contains(alias, '{query}') THEN 2 -- 完全匹配别名次之
-          WHEN name ILIKE '{query}%' THEN 1          -- 前缀匹配再次
-          ELSE 0 END DESC,
-          post_count DESC                            -- 最后按热度排序
+        WHERE name ILIKE '%{query}%' {OR_ALIAS_CLAUSE}
+        -- 由于 tags.parquet 已预先按 post_count 降序排列，直接 LIMIT 即可获得热度最高的匹配项。
+        -- 移除复杂的 ORDER BY 以最大化查询性能 (Zero-copy scan)。
         LIMIT 20
         ```
-    *   **别名子句 (Alias Clause)**: 取决于设置 `Use Aliases in Autocomplete`。若为 True，则添加 `OR list_contains(alias, '{query}')` (伪代码，具体取决于 DuckDB 列表查询语法)。
+    *   **别名子句 (Alias Clause)**: 仅当 `Use Aliases in Autocomplete` 为 True 时添加 `OR list_contains(alias, '{query}')`。默认关闭以提高性能。
 
 3.  **交互行为**
     *   **导航**: `Up` / `Down` 键切换高亮项。
@@ -123,7 +119,7 @@
         *   在设置菜单中切换。
     *   **别名设置 (Alias Settings)**:
         *   **在搜索中使用别名**: 切换开关 (默认: True)。若为 False，搜索仅匹配主标签名。
-        *   **在补全中使用别名**: 切换开关 (默认: True)。若为 False，补全列表仅显示主标签名。
+        *   **在补全中使用别名**: 切换开关 (默认: False)。若开启，补全也会匹配别名（会有轻微性能损耗）。
     *   **智能退格 (Smart Backspace)**:
         *   **功能**: 当删除标签的最后一个字符时，自动连同前面的逗号和空格一起删除（例如 `tag1, b` -> 退格 -> `tag1`）。
         *   **默认**: True。
@@ -183,8 +179,8 @@ class SimplePrompt:
     interface UserSettings {
         convertUnderscoreToSpace: boolean;  // 默认: true
         escapeBrackets: boolean;            // 默认: false
-        useAliasesInSearch: boolean;        // 默认: true
-        useAliasesInAutocomplete: boolean;  // 默认: true
+        useAliasesInSearch: boolean;        // 默认: true (仅影响搜索面板)
+        useAliasesInAutocomplete: boolean;  // 默认: false (补全时默认仅匹配名称)
         language: 'en' | 'zh-CN';           // 默认: 跟随浏览器
     }
     ```

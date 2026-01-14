@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, watch, nextTick, computed, onMounted, onUnmounted } from 'vue';
 import { DuckDBService } from '../utils/duckdbService';
+import { settings } from '../utils/settings';
 import { getCaretCoordinates } from '../utils/caret';
 import AutocompleteList from './AutocompleteList.vue';
 import VisualTagArea from './VisualTagArea.vue';
@@ -154,7 +155,7 @@ const checkAutocomplete = async (el: HTMLTextAreaElement) => {
         try {
             console.log(`[Autocomplete] Searching for: "${query}"`);
             const db = DuckDBService.getInstance();
-            const results = await db.searchTags(query);
+            const results = await db.searchTags(query, 20, settings.useAliasesInAutocomplete);
             
             searchResults.value = results;
             selectedIndex.value = 0;
