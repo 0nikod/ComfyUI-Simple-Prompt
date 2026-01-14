@@ -14,7 +14,9 @@
       "autocomplete": "补全与搜索",
       "editing": "编辑行为",
       "interface": "界面",
-      "data": "数据管理"
+      "interface": "界面",
+      "data": "数据管理",
+      "tagManager": "标签管理"
     },
     "items": {
       "convertUnderscore": "下划线转空格",
@@ -29,6 +31,8 @@
       "smartBackspaceDesc": "删除标签最后一个字符时，连同前面的逗号和空格一起删除",
       "language": "语言",
       "languageDesc": "界面语言",
+      "allowEditDefaultTags": "允许编辑默认标签",
+      "allowEditDefaultTagsDesc": "启用后可编辑和删除默认标签（请谨慎使用）。",
       "updateTags": "更新标签数据",
       "updateTagsDesc": "从 GitHub 下载最新的 tags.parquet",
       "updateLikedTags": "更新喜爱标签数据",

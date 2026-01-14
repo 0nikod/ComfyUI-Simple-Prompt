@@ -6,6 +6,9 @@ import { TagCategory, CATEGORY_COLORS } from '../utils/types';
 
 const props = defineProps<{
   visible: boolean;
+  editMode?: boolean;
+  initialData?: any;
+  targetSource?: string;
 }>();
 
 const emit = defineEmits<{
@@ -49,7 +52,16 @@ const resetForm = () => {
 
 watch(() => props.visible, (newVal) => {
   if (newVal) {
-    resetForm();
+    if (props.editMode && props.initialData) {
+        form.value = {
+            name: props.initialData.name,
+            category: props.initialData.category || TagCategory.GENERAL,
+            post_count: props.initialData.post_count || 0,
+            alias: Array.isArray(props.initialData.alias) ? props.initialData.alias.join(', ') : (props.initialData.alias || '')
+        };
+    } else {
+        resetForm();
+    }
   }
 });
 
@@ -75,7 +87,8 @@ const handleSave = async () => {
         name: form.value.name.trim(),
         category: form.value.category,
         post_count: Number(form.value.post_count),
-        alias: aliasArray
+        alias: aliasArray,
+        source: props.targetSource || 'user'
     };
 
     const response = await fetch('/simple-prompt/add-custom-tag', {
@@ -90,7 +103,7 @@ const handleSave = async () => {
         throw new Error(result.error || response.statusText);
     }
 
-    successMsg.value = t('customTag.successAdded');
+    successMsg.value = props.editMode ? t('customTag.successEdited') || 'Tag updated!' : t('customTag.successAdded');
     setTimeout(() => {
         emit('save');
         handleClose();
@@ -112,8 +125,8 @@ const handleSave = async () => {
         <!-- Header -->
         <div class="modal-header">
           <div class="modal-title">
-            <Icon icon="mdi:tag-plus" class="title-icon" />
-            <span>{{ t('customTag.title') }}</span>
+            <Icon :icon="editMode ? 'mdi:pencil' : 'mdi:tag-plus'" class="title-icon" />
+            <span>{{ editMode ? (t('customTag.titleEdit') || 'Edit Tag') : t('customTag.title') }}</span>
           </div>
           <button class="close-btn" @click="handleClose" :title="t('common.close')">
             <Icon icon="mdi:close" />
@@ -132,6 +145,7 @@ const handleSave = async () => {
                 :placeholder="t('customTag.namePlaceholder')"
                 class="sp-input"
                 autofocus
+                :disabled="editMode" 
             >
           </div>
 

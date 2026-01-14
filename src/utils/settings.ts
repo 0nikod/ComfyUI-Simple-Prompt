@@ -7,6 +7,7 @@ export interface UserSettings {
     useAliasesInAutocomplete: boolean;
     smartBackspace: boolean;
     language: 'en' | 'zh-CN';
+    allowEditDefaultTags: boolean;
 }
 
 const STORAGE_KEY = 'simplePrompt.settings';
@@ -18,6 +19,7 @@ const defaultSettings: UserSettings = {
     useAliasesInAutocomplete: false, // Default false as per new spec
     smartBackspace: false, // Default false - user must opt-in
     language: 'en', // Default fallback
+    allowEditDefaultTags: false,
 };
 
 export const settings = reactive<UserSettings>({ ...defaultSettings });

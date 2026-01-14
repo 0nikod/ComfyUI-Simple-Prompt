@@ -214,7 +214,108 @@ TAGS_SCHEMA = "name VARCHAR, category BIGINT, post_count BIGINT, alias VARCHAR[]
 # --------------------------------------------------------------------------------
 
 
-@PromptServer.instance.routes.get("/simple-prompt/health")
+# Helper to get path by source name
+def get_source_path_by_name(source: str):
+    if source == "user":
+        return USER_TAGS_PATH
+    elif source == "liked":
+        return LIKED_TAGS_PATH
+    elif source == "default":
+        return DEFAULT_TAGS_PATH
+    return None
+
+
+@PromptServer.instance.routes.get("/simple-prompt/tags/list")
+async def tags_list_api(request):
+    conn = get_db_connection()
+    if not conn:
+        return web.json_response({"error": "DuckDB not initialized"}, status=500)
+
+    try:
+        source = request.query.get("source", "user")
+        limit = int(request.query.get("limit", 50))
+        offset = int(request.query.get("offset", 0))
+        query = request.query.get("q", "")
+
+        path = get_source_path_by_name(source)
+        if not path or not os.path.exists(path):
+            return web.json_response({"data": [], "total": 0})
+
+        path_sql = path.replace("\\", "/")
+
+        where_clause = ""
+        params = []
+        if query:
+            where_clause = "WHERE name ILIKE ? OR EXISTS (SELECT 1 FROM unnest(alias) AS a(alias_value) WHERE alias_value ILIKE ?)"
+            params = [f"%{query}%", f"%{query}%"]
+
+        # Get Total Count
+        count_sql = f"SELECT COUNT(*) FROM read_parquet('{path_sql}') {where_clause}"
+        total = conn.execute(count_sql, params).fetchone()[0]
+
+        # Get Data
+        sql = f"""
+            SELECT * FROM read_parquet('{path_sql}') 
+            {where_clause}
+            ORDER BY post_count DESC, name ASC
+            LIMIT {limit} OFFSET {offset}
+        """
+
+        # Execute query
+        if params:
+            res = conn.execute(sql, params)
+        else:
+            res = conn.execute(sql)
+
+        cols = [desc[0] for desc in res.description]
+        data = [dict(zip(cols, row)) for row in res.fetchall()]
+
+        return web.json_response({"data": data, "total": total})
+
+    except Exception as e:
+        logger.error(f"Tags list error: {e}")
+        return web.json_response({"error": str(e)}, status=500)
+
+
+@PromptServer.instance.routes.delete("/simple-prompt/tags/delete")
+async def tags_delete_api(request):
+    conn = get_db_connection()
+    if not conn:
+        return web.json_response({"error": "Database unavailable"}, status=500)
+
+    try:
+        data = await request.json()
+        name = data.get("name")
+        source = data.get("source")
+
+        if not name or not source:
+            return web.json_response({"error": "Name and source are required"}, status=400)
+
+        path = get_source_path_by_name(source)
+        if not path:
+            return web.json_response({"error": "Invalid source"}, status=400)
+
+        ensure_parquet_exists(path, TAGS_SCHEMA)
+        path_sql = path.replace("\\", "/")
+
+        # Delete using temp table
+        conn.execute("DROP TABLE IF EXISTS temp_del_tags")
+        conn.execute(f"CREATE TABLE temp_del_tags AS SELECT * FROM read_parquet('{path_sql}')")
+
+        conn.execute("DELETE FROM temp_del_tags WHERE name = ?", [name])
+
+        conn.execute(f"COPY temp_del_tags TO '{path_sql}' (FORMAT PARQUET)")
+        conn.execute("DROP TABLE temp_del_tags")
+
+        init_duckdb()  # Refresh view
+
+        return web.json_response({"status": "success", "message": f"Tag '{name}' deleted from {source}."})
+
+    except Exception as e:
+        logger.error(f"Delete tag failed: {e}")
+        return web.json_response({"error": str(e)}, status=500)
+
+
 async def health_check_api(request):
     conn = get_db_connection()
     return web.json_response(
@@ -259,7 +360,7 @@ async def search_tags_api(request):
 @PromptServer.instance.routes.post("/simple-prompt/add-custom-tag")
 async def add_custom_tag_api(request):
     """
-    Add a custom tag to user_tags.parquet
+    Add or Edit a tag in user_tags.parquet (or default_tags.parquet)
     """
     conn = get_db_connection()
     if not conn:
@@ -272,30 +373,36 @@ async def add_custom_tag_api(request):
         post_count = int(data.get("post_count", 0))
         alias = data.get("alias", [])
 
+        source = data.get("source", "user")  # default to user
+
         if not name:
             return web.json_response({"error": "Name is required"}, status=400)
 
-        # Ensure file exists
-        ensure_parquet_exists(USER_TAGS_PATH, TAGS_SCHEMA)
+        target_path = get_source_path_by_name(source)
+        if not target_path:
+            return web.json_response({"error": "Invalid source"}, status=400)
 
-        # Load current User Tags into a specific table
+        # Ensure file exists
+        ensure_parquet_exists(target_path, TAGS_SCHEMA)
+
+        # Load current Tags into a specific table
         # We use a transaction-like approach: Read -> Insert/Update -> Write Back
 
-        user_path_sql = USER_TAGS_PATH.replace("\\", "/")
+        target_path_sql = target_path.replace("\\", "/")
 
         # 1. Create temp table from existing parquet
-        conn.execute("DROP TABLE IF EXISTS temp_user_tags")
-        conn.execute(f"CREATE TABLE temp_user_tags AS SELECT * FROM read_parquet('{user_path_sql}')")
+        conn.execute("DROP TABLE IF EXISTS temp_edit_tags")
+        conn.execute(f"CREATE TABLE temp_edit_tags AS SELECT * FROM read_parquet('{target_path_sql}')")
 
         # 2. Delete existing if any (overwrite logic)
-        conn.execute("DELETE FROM temp_user_tags WHERE name = ?", [name])
+        conn.execute("DELETE FROM temp_edit_tags WHERE name = ?", [name])
 
         # 3. Insert new tag
-        conn.execute("INSERT INTO temp_user_tags VALUES (?, ?, ?, ?)", [name, category, post_count, alias])
+        conn.execute("INSERT INTO temp_edit_tags VALUES (?, ?, ?, ?)", [name, category, post_count, alias])
 
         # 4. Write back to parquet
-        conn.execute(f"COPY temp_user_tags TO '{user_path_sql}' (FORMAT PARQUET)")
-        conn.execute("DROP TABLE temp_user_tags")
+        conn.execute(f"COPY temp_edit_tags TO '{target_path_sql}' (FORMAT PARQUET)")
+        conn.execute("DROP TABLE temp_edit_tags")
 
         # 5. Refresh Main View
         init_duckdb()

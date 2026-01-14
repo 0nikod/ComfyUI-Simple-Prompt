@@ -3,6 +3,7 @@ import { ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { Icon } from '@iconify/vue';
 import { settings } from '../utils/settings';
+import TagManager from './TagManager.vue';
 
 const props = defineProps({
   visible: {
@@ -29,7 +30,8 @@ const categories = [
   { id: 'autocomplete', icon: 'mdi:magnify' },
   { id: 'editing', icon: 'mdi:pencil' },
   { id: 'interface', icon: 'mdi:translate' },
-  { id: 'data', icon: 'mdi:database' }
+  { id: 'data', icon: 'mdi:database' },
+  { id: 'tagManager', icon: 'mdi:tag-multiple' }
 ];
 
 const activeCategory = ref('textFormat');
@@ -264,6 +266,17 @@ watch(() => props.visible, (newVal) => {
                 {{ t('settings.sections.data') }}
               </h3>
               
+              <div class="setting-item">
+                <div class="setting-info">
+                  <label class="setting-label">{{ t('settings.items.allowEditDefaultTags') || 'Allow Editing Default Tags' }}</label>
+                  <p class="setting-desc">{{ t('settings.items.allowEditDefaultTagsDesc') || 'Enable editing and deleting of default tags (Use with caution).' }}</p>
+                </div>
+                <label class="switch">
+                  <input type="checkbox" v-model="settings.allowEditDefaultTags">
+                  <span class="slider"></span>
+                </label>
+              </div>
+
               <!-- Update from GitHub -->
               <div class="setting-item data-update-item">
                 <div class="setting-info">
@@ -323,10 +336,20 @@ watch(() => props.visible, (newVal) => {
                 <span>{{ updateStatus }}</span>
               </div>
             </div>
+
+
+          <!-- Section: Tag Manager -->
+          <div v-if="activeCategory === 'tagManager'" class="settings-section full-width">
+              <h3 class="section-title">
+              <Icon icon="mdi:tag-multiple" />
+              {{ t('settings.sections.tagManager') || 'Tag Manager' }}
+            </h3>
+            <TagManager />
           </div>
         </div>
+      </div>
 
-        <!-- Footer -->
+      <!-- Footer -->
         <div class="settings-footer">
           <div class="footer-info">
             <Icon icon="mdi:information-outline" />
@@ -477,6 +500,10 @@ watch(() => props.visible, (newVal) => {
 
 .settings-section {
   max-width: 500px;
+}
+
+.settings-section.full-width {
+  max-width: 100%;
 }
 
 .section-title {

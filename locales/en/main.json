@@ -14,7 +14,9 @@
       "autocomplete": "Autocomplete & Search",
       "editing": "Editing Behavior",
       "interface": "Interface",
-      "data": "Data Management"
+      "interface": "Interface",
+      "data": "Data Management",
+      "tagManager": "Tag Manager"
     },
     "items": {
       "convertUnderscore": "Convert Underscore to Space",
@@ -29,6 +31,8 @@
       "smartBackspaceDesc": "When deleting the last character of a tag, also remove preceding comma and space",
       "language": "Language",
       "languageDesc": "Interface language",
+      "allowEditDefaultTags": "Allow Editing Default Tags",
+      "allowEditDefaultTagsDesc": "Enable editing and deleting of default tags (Use with caution).",
       "updateTags": "Update Tags Data",
       "updateTagsDesc": "Download the latest tags.parquet from GitHub",
       "updateLikedTags": "Update Liked Tags",
