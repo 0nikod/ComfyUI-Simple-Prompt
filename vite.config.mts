@@ -40,5 +40,15 @@ export default defineConfig({
         sourcemap: false,
         assetsInlineLimit: 0,
         cssCodeSplit: false
+    },
+    // We will use a symlink or copy strategy for data in dev, 
+    // but for now ensure 'data' is accessible if we put it in public or handle it otherwise.
+    // In this project structure, 'data' is at root. 
+    // To make it accessible via dev server, we can configure it as a static asset folder or just rely on relative paths if configured correctly.
+    // Simple solution: let's treat root as source for some static files or configure server.fs.allow
+    server: {
+        fs: {
+            allow: ['..'] // Allow serving files from one level up (project root)
+        }
     }
 })
