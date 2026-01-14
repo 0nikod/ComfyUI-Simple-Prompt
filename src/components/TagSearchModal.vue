@@ -124,6 +124,47 @@ const highlightMatch = (text: string, query: string): string => {
   const regex = new RegExp(`(${query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi');
   return text.replace(regex, '<strong class="match-bold">$1</strong>');
 };
+
+// --- Like Functionality ---
+const isLiked = (tag: any) => {
+    return tag.priority === 1; // 1 = Liked source
+};
+
+const toggleLike = async (tag: any, event: Event) => {
+    event.stopPropagation();
+    
+    const currentlyLiked = isLiked(tag);
+    // Optimistic update
+    tag.priority = currentlyLiked ? 4 : 1; // Toggle between Liked (1) and default (4 or whatever)
+    
+    try {
+        const payload = {
+            name: tag.name,
+            is_liked: !currentlyLiked,
+            category: tag.category,
+            post_count: tag.post_count,
+            alias: tag.alias
+        };
+        
+        await fetch('/simple-prompt/toggle-like-tag', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+        // Success - no undo needed
+        
+        // Re-search to sort correctly if needed? 
+        // Or just let it stay until next search.
+        // If sorting by priority, the position should change, but changing locally won't re-sort unless we trigger it.
+        // It's acceptable to keep it in place until re-search.
+        
+    } catch (e) {
+        console.error("Toggle like failed", e);
+        // Revert
+        tag.priority = currentlyLiked ? 1 : 4;
+    }
+};
+
 </script>
 
 <template>
@@ -219,9 +260,16 @@ const highlightMatch = (text: string, query: string): string => {
                   </span>
                 </div>
               </div>
-              <button class="add-btn" :title="t('search.addBtnTitle')">
-                <Icon icon="mdi:plus" />
-              </button>
+
+              <!-- Actions -->
+              <div class="actions">
+                  <button class="action-btn like-btn" :class="{ liked: isLiked(tag) }" @click="toggleLike(tag, $event)" :title="isLiked(tag) ? 'Unlike' : 'Like'">
+                      <Icon :icon="isLiked(tag) ? 'mdi:heart' : 'mdi:heart-outline'" />
+                  </button>
+                  <button class="action-btn add-btn" :title="t('search.addBtnTitle')">
+                    <Icon icon="mdi:plus" />
+                  </button>
+              </div>
             </div>
           </div>
 
@@ -523,16 +571,6 @@ const highlightMatch = (text: string, query: string): string => {
   margin-left: 6px;
 }
 
-.alias-badge {
-  padding: 2px 6px;
-  background-color: #ffa500;
-  color: #1e1e1e;
-  font-size: 10px;
-  font-weight: 600;
-  border-radius: 3px;
-  text-transform: uppercase;
-}
-
 .tag-meta {
   display: flex;
   align-items: center;
@@ -551,25 +589,58 @@ const highlightMatch = (text: string, query: string): string => {
   gap: 4px;
 }
 
-.add-btn {
-  background-color: #0075db;
-  border: none;
-  color: white;
+/* Actions */
+.actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.action-btn {
+  background: transparent;
+  border: 1px solid #444;
+  color: #ccc;
   cursor: pointer;
-  padding: 8px;
+  padding: 6px;
   display: flex;
   align-items: center;
   justify-content: center;
   border-radius: 4px;
   font-size: 18px;
   transition: all 0.2s;
-  flex-shrink: 0;
+}
+
+.action-btn:hover {
+    background-color: #333;
+    color: white;
+}
+
+.add-btn {
+  background-color: #0075db;
+  border: none;
+  color: white;
 }
 
 .add-btn:hover {
   background-color: #0060b5;
   transform: scale(1.1);
 }
+
+/* Like Button */
+.like-btn {
+}
+
+.like-btn.liked {
+    color: #e91e63;
+    border-color: #e91e63;
+    background-color: rgba(233, 30, 99, 0.1);
+}
+
+.like-btn:hover {
+    color: #e91e63;
+    border-color: #e91e63;
+}
+
 
 /* Scrollbar */
 .results-section::-webkit-scrollbar {
