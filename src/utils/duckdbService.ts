@@ -98,9 +98,12 @@ export class DuckDBService {
 
         try {
             const table = await this.conn.query(sql);
-            return table.toArray().map(row => row.toJSON());
+            const results = table.toArray().map(row => row.toJSON());
+            console.log(`[DuckDB] Search for "${safeQuery}" returned ${results.length} results`);
+            return results;
         } catch (error) {
             console.error("[DuckDB] Search failed:", error);
+            // Return empty array instead of throwing to prevent loading hang
             return [];
         }
     }
