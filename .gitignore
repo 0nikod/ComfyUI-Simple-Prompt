@@ -116,7 +116,9 @@ node.zip
 
 # duckdb
 data/*
+!data/default_tags.parquet
 
 uv.lock
 
 js/
+
