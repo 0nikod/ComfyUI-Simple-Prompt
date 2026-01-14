@@ -122,7 +122,7 @@
         *   **在补全中使用别名**: 切换开关 (默认: False)。若开启，补全也会匹配别名（会有轻微性能损耗）。
     *   **智能退格 (Smart Backspace)**:
         *   **功能**: 当删除标签的最后一个字符时，自动连同前面的逗号和空格一起删除（例如 `tag1, b` -> 退格 -> `tag1`）。
-        *   **默认**: True。
+        *   **默认**: False。
 
 ## 3. 技术规格 (Technical Specifications)
 
@@ -181,6 +181,7 @@ class SimplePrompt:
         escapeBrackets: boolean;            // 默认: false
         useAliasesInSearch: boolean;        // 默认: true (仅影响搜索面板)
         useAliasesInAutocomplete: boolean;  // 默认: false (补全时默认仅匹配名称)
+        smartBackspace: boolean;            // 默认: false (用户需手动启用)
         language: 'en' | 'zh-CN';           // 默认: 跟随浏览器
     }
     ```

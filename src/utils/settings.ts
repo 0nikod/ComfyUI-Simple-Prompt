@@ -5,6 +5,7 @@ export interface UserSettings {
     escapeBrackets: boolean;
     useAliasesInSearch: boolean;
     useAliasesInAutocomplete: boolean;
+    smartBackspace: boolean;
     language: 'en' | 'zh-CN';
 }
 
@@ -15,6 +16,7 @@ const defaultSettings: UserSettings = {
     escapeBrackets: false,
     useAliasesInSearch: true,
     useAliasesInAutocomplete: false, // Default false as per new spec
+    smartBackspace: false, // Default false - user must opt-in
     language: 'en', // Default fallback
 };
 

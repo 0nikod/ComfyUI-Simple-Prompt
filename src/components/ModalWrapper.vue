@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted } from 'vue';
 import { Icon } from '@iconify/vue';
+import SettingsModal from './SettingsModal.vue';
 
 // Define events
 const emit = defineEmits(['close', 'save']);
@@ -11,6 +12,17 @@ const props = defineProps({
     default: false
   }
 });
+
+// Settings modal state
+const showSettings = ref(false);
+
+const openSettings = () => {
+  showSettings.value = true;
+};
+
+const closeSettings = () => {
+  showSettings.value = false;
+};
 
 // Close handler
 const handleClose = () => {
@@ -53,7 +65,7 @@ onUnmounted(() => {
             <span>Simple Prompt Editor</span>
           </div>
           <div class="sp-modal-actions">
-            <button class="sp-btn-icon" title="Settings">
+            <button class="sp-btn-icon" title="Settings" @click="openSettings">
               <Icon icon="mdi:cog" />
             </button>
             <button class="sp-btn-icon sp-btn-close" @click="handleClose" title="Close">
@@ -79,6 +91,12 @@ onUnmounted(() => {
             </div>
         </div>
       </div>
+      
+      <!-- Settings Modal -->
+      <SettingsModal 
+        :visible="showSettings"
+        @close="closeSettings"
+      />
     </div>
   </Transition>
 </template>

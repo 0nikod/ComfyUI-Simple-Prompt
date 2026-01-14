@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from 'vue';
+import { computed, ref, nextTick } from 'vue';
 import type { TagItem } from '../utils/types';
 import { CATEGORY_COLORS, TagCategory } from '../utils/types';
 import { Icon } from '@iconify/vue';
@@ -41,6 +41,36 @@ const decreaseWeight = () => {
   const newWeight = Math.max(props.tag.weight - 0.1, 0.1);
   emit('update:weight', props.tag.id, parseFloat(newWeight.toFixed(1)));
 };
+
+const isEditing = ref(false);
+const weightInput = ref<HTMLInputElement | null>(null);
+const editingWeight = ref('');
+
+const startEditing = async () => {
+  editingWeight.value = props.tag.weight.toString();
+  isEditing.value = true;
+  await nextTick();
+  weightInput.value?.focus();
+  weightInput.value?.select();
+};
+
+const finishEditing = () => {
+  if (!isEditing.value) return;
+  
+  const parsed = parseFloat(editingWeight.value);
+  if (!isNaN(parsed) && parsed >= 0) {
+     emit('update:weight', props.tag.id, parseFloat(parsed.toFixed(2)));
+  }
+  isEditing.value = false;
+};
+
+const handleKeydown = (e: KeyboardEvent) => {
+  if (e.key === 'Enter') {
+    finishEditing();
+  } else if (e.key === 'Escape') {
+    isEditing.value = false;
+  }
+};
 </script>
 
 <template>
@@ -48,6 +78,7 @@ const decreaseWeight = () => {
     class="tag-item" 
     :class="{ disabled: !tag.enabled }"
     :style="{ '--category-color': categoryColor }"
+    @dblclick.stop="startEditing"
   >
     <!-- Category indicator dot -->
     <div class="tag-dot"></div>
@@ -56,7 +87,7 @@ const decreaseWeight = () => {
     <span class="tag-text" @click="handleToggle">{{ tag.text }}</span>
     
     <!-- Weight badge and controls -->
-    <div v-if="showWeight" class="tag-weight">
+    <div v-if="showWeight && !isEditing" class="tag-weight">
       <button class="weight-btn" @click="decreaseWeight" title="Decrease weight">
         <Icon icon="mdi:minus" />
       </button>
@@ -65,6 +96,17 @@ const decreaseWeight = () => {
         <Icon icon="mdi:plus" />
       </button>
     </div>
+
+    <!-- Inline editing input -->
+    <input 
+      v-if="isEditing"
+      ref="weightInput"
+      v-model="editingWeight"
+      class="weight-input"
+      @blur="finishEditing"
+      @keydown="handleKeydown"
+      @click.stop
+    />
     
     <!-- Remove button -->
     <button class="tag-remove" @click="handleRemove" title="Remove tag">
@@ -160,5 +202,22 @@ const decreaseWeight = () => {
 
 .tag-remove:hover {
   color: #c42b1c;
+}
+
+.weight-input {
+  width: 40px;
+  background: #1a1a1a;
+  border: 1px solid #555;
+  border-radius: 4px;
+  color: #ffa500;
+  font-size: 11px;
+  padding: 2px 4px;
+  margin-left: 4px;
+  outline: none;
+  font-weight: bold;
+}
+
+.weight-input:focus {
+  border-color: #ffa500;
 }
 </style>

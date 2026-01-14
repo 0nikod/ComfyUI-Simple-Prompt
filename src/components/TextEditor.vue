@@ -5,6 +5,8 @@ import { settings } from '../utils/settings';
 import { getCaretCoordinates } from '../utils/caret';
 import AutocompleteList from './AutocompleteList.vue';
 import VisualTagArea from './VisualTagArea.vue';
+import OtherFunctions from './OtherFunctions.vue';
+import TagSearchModal from './TagSearchModal.vue';
 import { textToTags, tagsToText } from '../utils/promptParser';
 import type { TagItem } from '../utils/types';
 
@@ -39,6 +41,9 @@ const menuPosition = ref({ top: 0, left: 0 });
 const currentQuery = ref('');
 const queryStartPos = ref(0);
 const loading = ref(false);
+
+// Search Modal State
+const showSearchModal = ref(false);
 
 // Sync prop to local value (one-way from parent)
 watch(() => props.modelValue, (newValue) => {
@@ -206,10 +211,21 @@ const selectItem = (item: any) => {
     const cursor = el.selectionEnd;
     const text = localValue.value;
     
+    // Get tag name and apply settings
+    let tagName = item.name;
+    
+    // Apply text formatting settings
+    if (settings.convertUnderscoreToSpace) {
+        tagName = tagName.replace(/_/g, ' ');
+    }
+    
+    if (settings.escapeBrackets) {
+        tagName = tagName.replace(/\(/g, '\\(').replace(/\)/g, '\\)');
+    }
+    
     // Replace the query with the selected tag name
     const prefix = text.substring(0, queryStartPos.value);
     const suffix = text.substring(cursor);
-    const tagName = item.name; 
     
     // Auto-append comma
     let newSuffix = suffix;
@@ -238,6 +254,46 @@ const handleBlur = () => {
     setTimeout(() => {
         showAutocomplete.value = false;
     }, 200);
+};
+
+// Handle search modal
+const openSearchModal = () => {
+    showSearchModal.value = true;
+};
+
+const closeSearchModal = () => {
+    showSearchModal.value = false;
+};
+
+// Add tag from search
+const handleAddTag = (tagName: string, category: number) => {
+    // Apply text formatting settings
+    let formattedTagName = tagName;
+    
+    if (settings.convertUnderscoreToSpace) {
+        formattedTagName = formattedTagName.replace(/_/g, ' ');
+    }
+    
+    if (settings.escapeBrackets) {
+        formattedTagName = formattedTagName.replace(/\(/g, '\\(').replace(/\)/g, '\\)');
+    }
+    
+    // Create a new tag and add it to the list
+    const newTag: TagItem = {
+        id: `tag-${Date.now()}-${Math.random()}`,
+        text: formattedTagName,
+        weight: 1.0,
+        enabled: true,
+        category: category
+    };
+    
+    const newTags = [...tags.value, newTag];
+    tags.value = newTags;
+    
+    // Update text
+    const newText = tagsToText(newTags);
+    localValue.value = newText;
+    emit('update:modelValue', newText);
 };
 
 // Expose focus method
@@ -299,14 +355,26 @@ defineExpose({ focus });
 
     <!-- 3. Visual Editor -->
     <div class="sp-visual-area">
-        <VisualTagArea :tags="tags" @update:tags="handleTagsUpdate" />
+        <VisualTagArea 
+          :tags="tags" 
+          @update:tags="handleTagsUpdate" 
+        />
     </div>
 
     <!-- 4. Other Functions (Footer) -->
     <div class="sp-footer">
-        <!-- Placeholder for other functions -->
-        <span class="footer-text">Other functions...</span>
+        <OtherFunctions 
+          :tag-count="tags.length"
+          @open-search="openSearchModal"
+        />
     </div>
+
+    <!-- Tag Search Modal -->
+    <TagSearchModal 
+      :visible="showSearchModal"
+      @close="closeSearchModal"
+      @add-tag="handleAddTag"
+    />
   </div>
 </template>
 
