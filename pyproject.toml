@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "comfyui_simple_prompt"
-version = "0.0.1"
+version = "0.0.2"
 description = "Provide a simple interface to simplify prompt writing. / 提供一个简单的界面简化提示词编写。"
 authors = [{ name = "ComfyUI-Simple-Prompt", email = "dniko0@outlook.com" }]
 readme = "README.md"

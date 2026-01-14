@@ -57,9 +57,12 @@ const saveChanges = () => {
         @close="closeModal"
         @save="saveChanges"
     >
-        <template #content>
+        <template #content="{ openCustomTag }">
             <div style="width: 100%; height: 100%;">
-                <TextEditor v-model="promptText" />
+                <TextEditor 
+                    v-model="promptText" 
+                    @open-custom-tag="openCustomTag"
+                />
             </div>
         </template>
     </ModalWrapper>

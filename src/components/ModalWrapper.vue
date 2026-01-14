@@ -3,6 +3,7 @@ import { ref, onMounted, onUnmounted } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { Icon } from '@iconify/vue';
 import SettingsModal from './SettingsModal.vue';
+import CustomTagModal from './CustomTagModal.vue';
 
 // Define events
 const emit = defineEmits(['close', 'save']);
@@ -18,6 +19,7 @@ const { t } = useI18n();
 
 // Settings modal state
 const showSettings = ref(false);
+const showCustomTag = ref(false);
 
 const openSettings = () => {
   showSettings.value = true;
@@ -25,6 +27,14 @@ const openSettings = () => {
 
 const closeSettings = () => {
   showSettings.value = false;
+};
+
+const openCustomTag = () => {
+  showCustomTag.value = true;
+};
+
+const closeCustomTag = () => {
+  showCustomTag.value = false;
 };
 
 // Close handler
@@ -39,6 +49,9 @@ const handleSave = () => {
 
 // Listen for Escape key to close
 const handleKeydown = (e: KeyboardEvent) => {
+  // If sub-modals are open, let them handle escape (or just ignore escape here)
+  if (showSettings.value || showCustomTag.value) return;
+
   if (e.key === 'Escape' && props.visible) {
     handleClose();
   }
@@ -79,7 +92,7 @@ onUnmounted(() => {
 
         <!-- Body (Split View) -->
         <div class="sp-modal-body">
-            <slot name="content"></slot>
+            <slot name="content" :openCustomTag="openCustomTag"></slot>
         </div>
 
         <!-- Footer -->
@@ -99,6 +112,12 @@ onUnmounted(() => {
       <SettingsModal 
         :visible="showSettings"
         @close="closeSettings"
+      />
+
+      <!-- Custom Tag Modal -->
+      <CustomTagModal
+        :visible="showCustomTag"
+        @close="closeCustomTag"
       />
     </div>
   </Transition>

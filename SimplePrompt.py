@@ -1,5 +1,8 @@
 import os
 import logging
+import json
+import asyncio
+import hashlib
 from typing import List, Dict, Any, Optional
 from server import PromptServer
 from aiohttp import web
@@ -7,7 +10,7 @@ from aiohttp import web
 # Configure logging
 logger = logging.getLogger("SimplePrompt")
 
-# Lazy import duckdb to avoid crash if not installed
+# Lazy import duckdb
 try:
     import duckdb
 except ImportError:
@@ -15,12 +18,29 @@ except ImportError:
     logger.error("Please install it using: pip install duckdb")
     duckdb = None
 
-# Get the path to the parquet file
-DATA_DIR = os.path.join(os.path.dirname(__file__), "data")
-PARQUET_PATH = os.path.join(DATA_DIR, "tags.parquet")
+# --------------------------------------------------------------------------------
+# Constants & Paths
+# --------------------------------------------------------------------------------
+BASE_DIR = os.path.dirname(__file__)
+DATA_DIR = os.path.join(BASE_DIR, "data")
+CUSTOM_DATA_DIR = os.path.join(DATA_DIR, "custom")
 
-# Initialize DuckDB connection
+# Primary Data Sources
+TAGS_PARQUET_PATH = os.path.join(DATA_DIR, "tags.parquet")  # Priority 4
+DEFAULT_TAGS_PATH = os.path.join(DATA_DIR, "default_tags.parquet")  # Priority 3
+USER_TAGS_PATH = os.path.join(CUSTOM_DATA_DIR, "user_tags.parquet")  # Priority 2
+LIKED_TAGS_PATH = os.path.join(CUSTOM_DATA_DIR, "liked_tags.parquet")  # Priority 1
+
+# Ensure custom directory exists
+os.makedirs(CUSTOM_DATA_DIR, exist_ok=True)
+
+# Global DuckDB Connection
 db_conn = None
+
+
+# --------------------------------------------------------------------------------
+# Database Management
+# --------------------------------------------------------------------------------
 
 
 def get_db_connection():
@@ -44,17 +64,62 @@ def init_duckdb():
     if not conn:
         return
 
-    if not os.path.exists(PARQUET_PATH):
-        logger.warning(f"Parquet file not found at: {PARQUET_PATH}")
+    logger.info("Initializing SimplePrompt Database...")
+
+    # Helper to check file existence and formatted path for SQL
+    def get_sql_path(path):
+        if os.path.exists(path):
+            return path.replace("\\", "/")
+        return None
+
+    sources = []
+
+    # Priority 1: Liked Tags
+    path = get_sql_path(LIKED_TAGS_PATH)
+    if path:
+        sources.append(f"SELECT name, category, post_count, alias, 1 as priority FROM read_parquet('{path}')")
+
+    # Priority 2: User Tags
+    path = get_sql_path(USER_TAGS_PATH)
+    if path:
+        sources.append(f"SELECT name, category, post_count, alias, 2 as priority FROM read_parquet('{path}')")
+
+    # Priority 3: Default Tags
+    path = get_sql_path(DEFAULT_TAGS_PATH)
+    if path:
+        sources.append(f"SELECT name, category, post_count, alias, 3 as priority FROM read_parquet('{path}')")
+
+    # Priority 4: Repo Tags (Main)
+    path = get_sql_path(TAGS_PARQUET_PATH)
+    if path:
+        sources.append(f"SELECT name, category, post_count, alias, 4 as priority FROM read_parquet('{path}')")
+    else:
+        logger.warning(f"Main tags.parquet not found at {TAGS_PARQUET_PATH}")
+
+    if not sources:
+        logger.warning("No tag data sources found.")
         return
 
+    # Create Unified View
     try:
-        # Use absolute path and replace backslashes for DuckDB
-        abs_path = os.path.abspath(PARQUET_PATH).replace("\\", "/")
-        # Use parameterized query for view creation isn't strictly necessary for safe paths,
-        # but manual string building is okay here as path is internal.
-        conn.execute(f"CREATE OR REPLACE VIEW tags AS SELECT * FROM read_parquet('{abs_path}')")
-        logger.info(f"DuckDB initialized with {abs_path}")
+        union_query = " UNION ALL ".join(sources)
+
+        # 1. Create Raw View containing all duplicates
+        conn.execute(f"CREATE OR REPLACE VIEW all_tags_raw AS {union_query}")
+
+        # 2. Create Deduplicated View (High priority wins)
+        # We assume standard schema: name, category, post_count, alias
+        conn.execute("""
+            CREATE OR REPLACE VIEW tags AS
+            SELECT * EXCLUDE (rn) FROM (
+                SELECT *, 
+                    ROW_NUMBER() OVER (PARTITION BY name ORDER BY priority ASC) as rn
+                FROM all_tags_raw
+            ) WHERE rn = 1
+        """)
+
+        logger.info("DuckDB initialized with multi-source views.")
+
     except Exception as e:
         logger.error(f"DuckDB initialization failed: {e}")
 
@@ -64,89 +129,206 @@ if duckdb:
     init_duckdb()
 
 
+# --------------------------------------------------------------------------------
+# Core Logic
+# --------------------------------------------------------------------------------
+
+
 def search_tags(
-    conn, query: str, limit: int = 20, use_aliases: bool = False, categories: Optional[List[int]] = None
+    conn, query: str, limit: int = 100, use_aliases: bool = False, categories: Optional[List[int]] = None
 ) -> List[Dict[str, Any]]:
-    """
-    Search for tags in the DuckDB database.
-
-    Args:
-        conn: DuckDB connection object.
-        query: Search query string.
-        limit: Maximum number of results to return.
-        use_aliases: Whether to search in aliases as well.
-        categories: List of category IDs to filter by.
-
-    Returns:
-        List of dictionaries representing the found tags.
-    """
     if not conn:
-        logger.error("Database connection is not available")
         return []
 
-    # Prepare specific parts of the query
-    alias_clause = ""
-    # We use parameterized queries for the main search term, but for structural logic
-    # like "OR EXISTS (...)" we still construct the string carefully.
-    # HOWEVER, the sensitive part (the user input) is passed as a parameter.
-
-    # DuckDB python client supports parameters.
-    # We will construct the SQL with placeholders (?)
-
     params = []
-    # Using '%' around query for LIKE usually requires concatenating inside SQL or passing the full string as param.
-    # DuckDB standard: ILIKE ?
-    # And we pass f"%{query}%" as the parameter.
-
     search_term = f"%{query}%"
     params.append(search_term)
 
+    alias_clause = ""
     if use_aliases:
-        # For aliases, we also want to search securely.
-        # "name ILIKE ? OR EXISTS (SELECT 1 FROM unnest(alias) AS a(alias_value) WHERE alias_value ILIKE ?)"
+        # Searching inside the list of aliases
         alias_clause = "OR EXISTS (SELECT 1 FROM unnest(alias) AS a(alias_value) WHERE alias_value ILIKE ?)"
         params.append(search_term)
 
     category_clause = ""
     if categories:
-        # DuckDB: AND category IN (?, ?, ?) is standard.
         placeholders = ",".join(["?"] * len(categories))
         category_clause = f"AND category IN ({placeholders})"
         params.extend(categories)
 
-    # LIMIT also as a parameter for total safety, though usually it's an int.
-    # params.append(limit) -> LIMIT ?
+    # Add limit to params
+    params.append(limit)
 
     sql = f"""
         SELECT * FROM tags
         WHERE (name ILIKE ? {alias_clause})
         {category_clause}
+        ORDER BY priority ASC, post_count DESC
         LIMIT ?
     """
-    params.append(limit)
 
     try:
         res = conn.execute(sql, params)
         cols = [desc[0] for desc in res.description]
-
         results = []
         for row in res.fetchall():
             row_dict = {}
             for i, val in enumerate(row):
                 row_dict[cols[i]] = val
             results.append(row_dict)
-
         return results
     except Exception as e:
         logger.error(f"Search failed: {e}")
         return []
 
 
-# API Routes
-@PromptServer.instance.routes.get("/simple-prompt/health")
+def ensure_parquet_exists(path: str, schema_sql: str):
+    """Ensures a parquet file exists with the given schema."""
+    if os.path.exists(path):
+        return
+
+    conn = get_db_connection()
+    if not conn:
+        return
+
+    try:
+        # Create an empty table with the correct schema and write to parquet
+        temp_name = f"temp_init_{os.path.basename(path).replace('.', '_')}"
+        conn.execute(f"CREATE TABLE {temp_name} ({schema_sql})")
+        # Write empty table
+        # We need to format path for DuckDB
+        save_path = path.replace("\\", "/")
+        conn.execute(f"COPY {temp_name} TO '{save_path}' (FORMAT PARQUET)")
+        conn.execute(f"DROP TABLE {temp_name}")
+        logger.info(f"Created empty parquet file: {path}")
+    except Exception as e:
+        logger.error(f"Failed to create parquet {path}: {e}")
+
+
+# Schema for all tag files
+TAGS_SCHEMA = "name VARCHAR, category BIGINT, post_count BIGINT, alias VARCHAR[]"
+
+
+# --------------------------------------------------------------------------------
+# API Handlers
+# --------------------------------------------------------------------------------
+
+
+# Helper to get path by source name
+def get_source_path_by_name(source: str):
+    if source == "user":
+        return USER_TAGS_PATH
+    elif source == "liked":
+        return LIKED_TAGS_PATH
+    elif source == "default":
+        return DEFAULT_TAGS_PATH
+    return None
+
+
+@PromptServer.instance.routes.get("/simple-prompt/tags/list")
+async def tags_list_api(request):
+    conn = get_db_connection()
+    if not conn:
+        return web.json_response({"error": "DuckDB not initialized"}, status=500)
+
+    try:
+        source = request.query.get("source", "user")
+        limit = int(request.query.get("limit", 50))
+        offset = int(request.query.get("offset", 0))
+        query = request.query.get("q", "")
+
+        path = get_source_path_by_name(source)
+        if not path or not os.path.exists(path):
+            return web.json_response({"data": [], "total": 0})
+
+        path_sql = path.replace("\\", "/")
+
+        where_clause = ""
+        params = []
+        if query:
+            where_clause = "WHERE name ILIKE ? OR EXISTS (SELECT 1 FROM unnest(alias) AS a(alias_value) WHERE alias_value ILIKE ?)"
+            params = [f"%{query}%", f"%{query}%"]
+
+        # Get Total Count
+        count_sql = f"SELECT COUNT(*) FROM read_parquet('{path_sql}') {where_clause}"
+        total = conn.execute(count_sql, params).fetchone()[0]
+
+        # Get Data
+        sql = f"""
+            SELECT * FROM read_parquet('{path_sql}') 
+            {where_clause}
+            ORDER BY post_count DESC, name ASC
+            LIMIT {limit} OFFSET {offset}
+        """
+
+        # Execute query
+        if params:
+            res = conn.execute(sql, params)
+        else:
+            res = conn.execute(sql)
+
+        cols = [desc[0] for desc in res.description]
+        data = [dict(zip(cols, row)) for row in res.fetchall()]
+
+        return web.json_response({"data": data, "total": total})
+
+    except Exception as e:
+        logger.error(f"Tags list error: {e}")
+        return web.json_response({"error": str(e)}, status=500)
+
+
+@PromptServer.instance.routes.delete("/simple-prompt/tags/delete")
+async def tags_delete_api(request):
+    conn = get_db_connection()
+    if not conn:
+        return web.json_response({"error": "Database unavailable"}, status=500)
+
+    try:
+        data = await request.json()
+        name = data.get("name")
+        source = data.get("source")
+
+        if not name or not source:
+            return web.json_response({"error": "Name and source are required"}, status=400)
+
+        path = get_source_path_by_name(source)
+        if not path:
+            return web.json_response({"error": "Invalid source"}, status=400)
+
+        ensure_parquet_exists(path, TAGS_SCHEMA)
+        path_sql = path.replace("\\", "/")
+
+        # Delete using temp table
+        conn.execute("DROP TABLE IF EXISTS temp_del_tags")
+        conn.execute(f"CREATE TABLE temp_del_tags AS SELECT * FROM read_parquet('{path_sql}')")
+
+        conn.execute("DELETE FROM temp_del_tags WHERE name = ?", [name])
+
+        conn.execute(f"COPY temp_del_tags TO '{path_sql}' (FORMAT PARQUET)")
+        conn.execute("DROP TABLE temp_del_tags")
+
+        init_duckdb()  # Refresh view
+
+        return web.json_response({"status": "success", "message": f"Tag '{name}' deleted from {source}."})
+
+    except Exception as e:
+        logger.error(f"Delete tag failed: {e}")
+        return web.json_response({"error": str(e)}, status=500)
+
+
 async def health_check_api(request):
     conn = get_db_connection()
-    return web.json_response({"status": "ok", "duckdb": "loaded" if conn else "failed", "parquet": os.path.exists(PARQUET_PATH)})
+    return web.json_response(
+        {
+            "status": "ok",
+            "duckdb": "loaded" if conn else "failed",
+            "sources": {
+                "main": os.path.exists(TAGS_PARQUET_PATH),
+                "user": os.path.exists(USER_TAGS_PATH),
+                "liked": os.path.exists(LIKED_TAGS_PATH),
+            },
+        }
+    )
 
 
 @PromptServer.instance.routes.get("/simple-prompt/search-tags")
@@ -156,7 +338,7 @@ async def search_tags_api(request):
         return web.json_response({"error": "DuckDB not initialized"}, status=500)
 
     query = request.query.get("q", "")
-    limit_val = int(request.query.get("limit", 20))
+    limit_val = int(request.query.get("limit", 50))
     use_aliases = request.query.get("use_aliases", "false").lower() == "true"
     categories_str = request.query.get("categories", "")
 
@@ -165,7 +347,7 @@ async def search_tags_api(request):
         try:
             categories = [int(c) for c in categories_str.split(",") if c.strip()]
         except ValueError:
-            pass  # Ignore invalid categories
+            pass
 
     try:
         results = search_tags(conn, query, limit_val, use_aliases, categories)
@@ -175,19 +357,287 @@ async def search_tags_api(request):
         return web.json_response([], status=500)
 
 
+@PromptServer.instance.routes.post("/simple-prompt/add-custom-tag")
+async def add_custom_tag_api(request):
+    """
+    Add or Edit a tag in user_tags.parquet (or default_tags.parquet)
+    """
+    conn = get_db_connection()
+    if not conn:
+        return web.json_response({"error": "Database unavailable"}, status=500)
+
+    try:
+        data = await request.json()
+        name = data.get("name")
+        category = int(data.get("category", 0))
+        post_count = int(data.get("post_count", 0))
+        alias = data.get("alias", [])
+
+        source = data.get("source", "user")  # default to user
+
+        if not name:
+            return web.json_response({"error": "Name is required"}, status=400)
+
+        target_path = get_source_path_by_name(source)
+        if not target_path:
+            return web.json_response({"error": "Invalid source"}, status=400)
+
+        # Ensure file exists
+        ensure_parquet_exists(target_path, TAGS_SCHEMA)
+
+        # Load current Tags into a specific table
+        # We use a transaction-like approach: Read -> Insert/Update -> Write Back
+
+        target_path_sql = target_path.replace("\\", "/")
+
+        # 1. Create temp table from existing parquet
+        conn.execute("DROP TABLE IF EXISTS temp_edit_tags")
+        conn.execute(f"CREATE TABLE temp_edit_tags AS SELECT * FROM read_parquet('{target_path_sql}')")
+
+        # 2. Delete existing if any (overwrite logic)
+        conn.execute("DELETE FROM temp_edit_tags WHERE name = ?", [name])
+
+        # 3. Insert new tag
+        conn.execute("INSERT INTO temp_edit_tags VALUES (?, ?, ?, ?)", [name, category, post_count, alias])
+
+        # 4. Write back to parquet
+        conn.execute(f"COPY temp_edit_tags TO '{target_path_sql}' (FORMAT PARQUET)")
+        conn.execute("DROP TABLE temp_edit_tags")
+
+        # 5. Refresh Main View
+        init_duckdb()
+
+        return web.json_response({"status": "success", "message": f"Tag '{name}' added."})
+
+    except Exception as e:
+        logger.error(f"Add custom tag failed: {e}")
+        return web.json_response({"error": str(e)}, status=500)
+
+
+@PromptServer.instance.routes.post("/simple-prompt/toggle-like-tag")
+async def toggle_like_tag_api(request):
+    """
+    Toggle a tag in liked_tags.parquet
+    """
+    conn = get_db_connection()
+    if not conn:
+        return web.json_response({"error": "Database unavailable"}, status=500)
+
+    try:
+        data = await request.json()
+        name = data.get("name")
+        # If is_liked is missing, we assume true (add it) UNLESS it's already there?
+        # No, client should track state. But safer: if is_liked=None, treat as "Toggle" (if exists remove, else add).
+        # But for now let's assume client sends explicit state or we default to True (Add).
+        should_like = data.get("is_liked", True)
+
+        if not name:
+            return web.json_response({"error": "Name is required"}, status=400)
+
+        ensure_parquet_exists(LIKED_TAGS_PATH, TAGS_SCHEMA)
+        liked_path_sql = LIKED_TAGS_PATH.replace("\\", "/")
+
+        conn.execute("DROP TABLE IF EXISTS temp_liked_tags")
+        conn.execute(f"CREATE TABLE temp_liked_tags AS SELECT * FROM read_parquet('{liked_path_sql}')")
+
+        # Always remove first to avoid duplicates
+        conn.execute("DELETE FROM temp_liked_tags WHERE name = ?", [name])
+
+        if should_like:
+            # We need tag data.
+            category = data.get("category")
+            post_count = data.get("post_count")
+            alias = data.get("alias", [])
+
+            # If data is missing, try to find it in the main DB
+            if category is None or post_count is None:
+                # Check current 'tags' view. It creates circular dependency if we aren't careful?
+                # 'tags' view depends on 'liked_tags'!
+                # But 'tags' view is currently loaded in memory from *files*.
+                # We are modifying the *file* for liked tags.
+                # The 'tags' view in memory is still valid until we re-init.
+                # So we can query 'tags' view to find info about this tag from other sources (User/Default/Repo).
+                # Wait, if it was already in Liked, it was in 'tags' view coming from Liked.
+                # If we just deleted it from temp_liked_tags (not the view), the view still has it.
+                # Querying 'tags' view might return the Liked version if it was already liked.
+                # We want the 'underlying' version.
+
+                # Better approach: explicit query from low-priority sources.
+                pass
+
+            # Fallback query if data missing
+            if category is None or post_count is None:
+                # Try finding in User > Default > Main
+                found = False
+                for source_path in [USER_TAGS_PATH, DEFAULT_TAGS_PATH, TAGS_PARQUET_PATH]:
+                    if os.path.exists(source_path):
+                        src_sql = source_path.replace("\\", "/")
+                        res = conn.execute(
+                            f"SELECT category, post_count, alias FROM read_parquet('{src_sql}') WHERE name = ?", [name]
+                        ).fetchone()
+                        if res:
+                            category = res[0]
+                            post_count = res[1]
+                            alias = res[2]
+                            found = True
+                            break
+
+            # Default values if still missing
+            if category is None:
+                category = 0
+            if post_count is None:
+                post_count = 0
+            if alias is None:
+                alias = []
+
+            conn.execute("INSERT INTO temp_liked_tags VALUES (?, ?, ?, ?)", [name, category, post_count, alias])
+            msg = f"Tag '{name}' liked."
+        else:
+            msg = f"Tag '{name}' unliked."
+
+        # Write back
+        conn.execute(f"COPY temp_liked_tags TO '{liked_path_sql}' (FORMAT PARQUET)")
+        conn.execute("DROP TABLE temp_liked_tags")
+
+        # Refresh View
+        init_duckdb()
+
+        return web.json_response({"status": "success", "message": msg, "is_liked": should_like})
+
+    except Exception as e:
+        logger.error(f"Toggle like failed: {e}")
+        return web.json_response({"error": str(e)}, status=500)
+
+
+@PromptServer.instance.routes.post("/simple-prompt/update-data")
+async def update_data_api(request):
+    """
+    Bulk update liked_tags or user_tags
+    """
+    conn = get_db_connection()
+    try:
+        data = await request.json()
+        action = data.get("action")  # 'update_liked', 'update_user'
+
+        if action == "update_liked":
+            target_path = LIKED_TAGS_PATH
+            ensure_parquet_exists(target_path, TAGS_SCHEMA)
+            target_path_sql = target_path.replace("\\", "/")
+
+            # 1. Read Liked Tags
+            conn.execute("DROP TABLE IF EXISTS temp_target")
+            conn.execute(f"CREATE TABLE temp_target AS SELECT * FROM read_parquet('{target_path_sql}')")
+
+            # 2. Update stats from lower priorities
+            other_sources = []
+            if os.path.exists(USER_TAGS_PATH):
+                other_sources.append(
+                    f"SELECT name, category, post_count, alias, 2 as p FROM read_parquet('{USER_TAGS_PATH.replace(os.sep, '/')}')"
+                )
+            if os.path.exists(DEFAULT_TAGS_PATH):
+                other_sources.append(
+                    f"SELECT name, category, post_count, alias, 3 as p FROM read_parquet('{DEFAULT_TAGS_PATH.replace(os.sep, '/')}')"
+                )
+            if os.path.exists(TAGS_PARQUET_PATH):
+                other_sources.append(
+                    f"SELECT name, category, post_count, alias, 4 as p FROM read_parquet('{TAGS_PARQUET_PATH.replace(os.sep, '/')}')"
+                )
+
+            if other_sources:
+                union_q = " UNION ALL ".join(other_sources)
+                conn.execute(f"CREATE OR REPLACE VIEW others_raw AS {union_q}")
+                conn.execute("""
+                    CREATE OR REPLACE VIEW others_best AS 
+                    SELECT * EXCLUDE (rn) FROM (
+                        SELECT *, ROW_NUMBER() OVER (PARTITION BY name ORDER BY p ASC) as rn FROM others_raw
+                    ) WHERE rn = 1
+                """)
+
+                # Perform Update
+                conn.execute("""
+                    UPDATE temp_target
+                    SET category = others_best.category,
+                        post_count = others_best.post_count,
+                        alias = others_best.alias
+                    FROM others_best
+                    WHERE temp_target.name = others_best.name
+                """)
+
+                conn.execute("DROP VIEW others_best")
+                conn.execute("DROP VIEW others_raw")
+
+            # Write back
+            conn.execute(f"COPY temp_target TO '{target_path_sql}' (FORMAT PARQUET)")
+            conn.execute("DROP TABLE temp_target")
+
+            init_duckdb()
+            return web.json_response({"status": "success", "message": "Liked tags data updated from main DB."})
+
+        elif action == "update_user":
+            target_path = USER_TAGS_PATH
+            ensure_parquet_exists(target_path, TAGS_SCHEMA)
+            target_path_sql = target_path.replace("\\", "/")
+
+            conn.execute("DROP TABLE IF EXISTS temp_target")
+            conn.execute(f"CREATE TABLE temp_target AS SELECT * FROM read_parquet('{target_path_sql}')")
+
+            other_sources = []
+            if os.path.exists(DEFAULT_TAGS_PATH):
+                other_sources.append(
+                    f"SELECT name, category, post_count, alias, 3 as p FROM read_parquet('{DEFAULT_TAGS_PATH.replace(os.sep, '/')}')"
+                )
+            if os.path.exists(TAGS_PARQUET_PATH):
+                other_sources.append(
+                    f"SELECT name, category, post_count, alias, 4 as p FROM read_parquet('{TAGS_PARQUET_PATH.replace(os.sep, '/')}')"
+                )
+
+            if other_sources:
+                union_q = " UNION ALL ".join(other_sources)
+                conn.execute(f"CREATE OR REPLACE VIEW others_raw AS {union_q}")
+                conn.execute("""
+                    CREATE OR REPLACE VIEW others_best AS 
+                    SELECT * EXCLUDE (rn) FROM (
+                        SELECT *, ROW_NUMBER() OVER (PARTITION BY name ORDER BY p ASC) as rn FROM others_raw
+                    ) WHERE rn = 1
+                """)
+
+                conn.execute("""
+                    UPDATE temp_target
+                    SET category = others_best.category,
+                        post_count = others_best.post_count,
+                        alias = others_best.alias
+                    FROM others_best
+                    WHERE temp_target.name = others_best.name
+                """)
+
+                conn.execute("DROP VIEW others_best")
+                conn.execute("DROP VIEW others_raw")
+
+            conn.execute(f"COPY temp_target TO '{target_path_sql}' (FORMAT PARQUET)")
+            conn.execute("DROP TABLE temp_target")
+
+            init_duckdb()
+            return web.json_response({"status": "success", "message": "User tags data updated."})
+
+        else:
+            return web.json_response({"error": "Unknown action"}, status=400)
+
+    except Exception as e:
+        logger.error(f"Update data failed: {e}")
+        return web.json_response({"error": str(e)}, status=500)
+
+
 @PromptServer.instance.routes.get("/simple-prompt/check-update")
 async def check_update_api(request):
     import aiohttp
-    import hashlib
 
     release_url = "https://api.github.com/repos/0nikod/danbooru_tag_process/releases/latest"
 
-    # 1. Calculate local SHA256
     local_sha256 = ""
-    if os.path.exists(PARQUET_PATH):
+    if os.path.exists(TAGS_PARQUET_PATH):
         try:
             sha256_hash = hashlib.sha256()
-            with open(PARQUET_PATH, "rb") as f:
+            with open(TAGS_PARQUET_PATH, "rb") as f:
                 for byte_block in iter(lambda: f.read(4096), b""):
                     sha256_hash.update(byte_block)
             local_sha256 = sha256_hash.hexdigest()
@@ -196,14 +646,12 @@ async def check_update_api(request):
 
     try:
         async with aiohttp.ClientSession() as session:
-            # 2. Fetch latest release info
             headers = {"User-Agent": "ComfyUI-Simple-Prompt"}
             async with session.get(release_url, headers=headers) as resp:
                 if resp.status != 200:
                     return web.json_response({"error": f"Failed to fetch release info: {resp.status}"}, status=500)
                 release_info = await resp.json()
 
-            # 3. Find asset and its digest
             target_asset = None
             asset_names = ["tags_processed.parquet", "tags.parquet"]
             for name in asset_names:
@@ -215,17 +663,12 @@ async def check_update_api(request):
                     break
 
             if not target_asset:
-                return web.json_response({"error": "Tag data file not found in the latest release"}, status=404)
+                return web.json_response({"error": "Tag data file not found"}, status=404)
 
-            # GitHub provides digest in the asset info for some repositories or
-            # we can use the 'digest' field if it exists (like in the user's provided JSON)
-            # It looks like "digest": "sha256:..."
             remote_digest = target_asset.get("digest", "")
             if remote_digest.startswith("sha256:"):
                 remote_sha256 = remote_digest[7:]
             else:
-                # If not in digest field, we might not be able to compare without downloading
-                # But in the user's JSON, it IS there.
                 remote_sha256 = remote_digest
 
             update_available = local_sha256 != remote_sha256
@@ -248,7 +691,6 @@ async def check_update_api(request):
 @PromptServer.instance.routes.post("/simple-prompt/update-tags")
 async def update_tags_api(request):
     import aiohttp
-    import json
 
     try:
         data = await request.json()
@@ -259,14 +701,12 @@ async def update_tags_api(request):
 
     try:
         async with aiohttp.ClientSession() as session:
-            # 1. Fetch release info
             headers = {"User-Agent": "ComfyUI-Simple-Prompt"}
             async with session.get(release_url, headers=headers) as resp:
                 if resp.status != 200:
                     return web.json_response({"error": f"Failed to fetch release info: {resp.status}"}, status=500)
                 release_info = await resp.json()
 
-            # 2. Find tags.parquet or tags_processed.parquet asset
             download_url = None
             asset_names = ["tags_processed.parquet", "tags.parquet"]
             for name in asset_names:
@@ -278,31 +718,23 @@ async def update_tags_api(request):
                     break
 
             if not download_url:
-                return web.json_response({"error": "Tag data file not found in the latest release"}, status=404)
+                return web.json_response({"error": "Tag data file not found"}, status=404)
 
-            # 3. Download the file
             async with session.get(download_url) as resp:
                 if resp.status != 200:
-                    return web.json_response({"error": f"Failed to download tags.parquet: {resp.status}"}, status=500)
+                    return web.json_response({"error": f"Failed to download: {resp.status}"}, status=500)
 
                 content = await resp.read()
-
-                # Ensure data directory exists
                 os.makedirs(DATA_DIR, exist_ok=True)
-
-                # Save to a temporary file first to avoid corruption
-                temp_path = PARQUET_PATH + ".tmp"
+                temp_path = TAGS_PARQUET_PATH + ".tmp"
                 with open(temp_path, "wb") as f:
                     f.write(content)
 
-                # Replace the old file
-                if os.path.exists(PARQUET_PATH):
-                    os.remove(PARQUET_PATH)
-                os.rename(temp_path, PARQUET_PATH)
+                if os.path.exists(TAGS_PARQUET_PATH):
+                    os.remove(TAGS_PARQUET_PATH)
+                os.rename(temp_path, TAGS_PARQUET_PATH)
 
-            # 4. Re-initialize DuckDB
             init_duckdb()
-
             return web.json_response({"status": "success", "message": "Tags updated successfully"})
 
     except Exception as e:

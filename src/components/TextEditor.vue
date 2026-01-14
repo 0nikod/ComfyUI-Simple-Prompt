@@ -18,7 +18,7 @@ const props = defineProps({
   }
 });
 
-const emit = defineEmits(['update:modelValue', 'cursor-move']);
+const emit = defineEmits(['update:modelValue', 'cursor-move', 'open-custom-tag']);
 const { t } = useI18n();
 
 const textareaRef = ref<HTMLTextAreaElement | null>(null);
@@ -312,6 +312,9 @@ defineExpose({ focus });
     <div class="sp-toolbar">
         <button class="sp-btn" @click="copyToClipboard" :title="t('editor.copyTitle')">
             <span class="icon">📋</span> {{ t('editor.copy') }}
+        </button>
+        <button class="sp-btn" @click="$emit('open-custom-tag')" :title="t('customTag.addBtnTitle')">
+            <span class="icon">➕</span> {{ t('customTag.addBtnTitle') }}
         </button>
         <!-- Add more buttons here as needed -->
     </div>

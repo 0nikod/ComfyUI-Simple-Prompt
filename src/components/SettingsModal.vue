@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import { ref, watch, computed } from 'vue';
+import { ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { Icon } from '@iconify/vue';
 import { settings } from '../utils/settings';
+import TagManager from './TagManager.vue';
 
 const props = defineProps({
   visible: {
@@ -29,7 +30,8 @@ const categories = [
   { id: 'autocomplete', icon: 'mdi:magnify' },
   { id: 'editing', icon: 'mdi:pencil' },
   { id: 'interface', icon: 'mdi:translate' },
-  { id: 'data', icon: 'mdi:database' }
+  { id: 'data', icon: 'mdi:database' },
+  { id: 'tagManager', icon: 'mdi:tag-multiple' }
 ];
 
 const activeCategory = ref('textFormat');
@@ -38,60 +40,84 @@ const activeCategory = ref('textFormat');
 const updateStatus = ref('');
 const isUpdating = ref(false);
 const isChecking = ref(false);
-const updateAvailable = ref(false);
 const latestVersion = ref('');
 
-const handleUpdateAction = async () => {
-  if (isUpdating.value || isChecking.value) return;
-  
-  // 1. Check for updates first
-  isChecking.value = true;
-  updateStatus.value = t('settings.checkingUpdate');
-  
-  try {
-    const checkResponse = await fetch('/simple-prompt/check-update');
-    const checkResult = await checkResponse.json();
+// Generic Data Update Handler
+const handleDataUpdate = async (action: 'update_github' | 'update_liked' | 'update_user') => {
+    if (isUpdating.value || isChecking.value) return;
     
-    if (!checkResponse.ok) {
-      updateStatus.value = t('settings.updateError') + (checkResult.error || checkResponse.statusText);
-      isChecking.value = false;
-      return;
-    }
-
-    latestVersion.value = checkResult.version;
-    isChecking.value = false;
-
-    if (!checkResult.update_available) {
-      updateStatus.value = t('settings.upToDate') + latestVersion.value;
-      return;
-    }
-
-    // 2. Proceed to update if available
     isUpdating.value = true;
-    updateStatus.value = t('settings.updating');
+    updateStatus.value = '';
     
-    const updateResponse = await fetch('/simple-prompt/update-tags', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({})
-    });
-    
-    const updateResult = await updateResponse.json();
-    
-    if (updateResponse.ok && updateResult.status === 'success') {
-      updateStatus.value = t('settings.updateSuccess');
-    } else {
-      updateStatus.value = t('settings.updateError') + (updateResult.error || updateResponse.statusText);
+    try {
+        if (action === 'update_github') {
+             // 1. Check for updates first
+            isChecking.value = true;
+            updateStatus.value = t('settings.checkingUpdate');
+            
+            try {
+                const checkResponse = await fetch('/simple-prompt/check-update');
+                const checkResult = await checkResponse.json();
+                
+                if (!checkResponse.ok) {
+                    throw new Error(checkResult.error || checkResponse.statusText);
+                }
+
+                latestVersion.value = checkResult.version;
+                isChecking.value = false;
+
+                if (!checkResult.update_available) {
+                    updateStatus.value = t('settings.upToDate') + latestVersion.value;
+                    return;
+                }
+
+                // 2. Proceed to update if available
+                updateStatus.value = t('settings.updating');
+                
+                const updateResponse = await fetch('/simple-prompt/update-tags', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({})
+                });
+                
+                const updateResult = await updateResponse.json();
+                
+                if (updateResponse.ok && updateResult.status === 'success') {
+                    updateStatus.value = t('settings.updateSuccess');
+                } else {
+                    throw new Error(updateResult.error || updateResponse.statusText);
+                }
+            } finally {
+                isChecking.value = false; // ensure check flag cleared
+            }
+        } 
+        else {
+            // Local Data Update (Liked or User)
+            updateStatus.value = t('settings.updating');
+            const endpoint = '/simple-prompt/update-data';
+            const payload = { action }; // 'update_liked' or 'update_user'
+            
+            const response = await fetch(endpoint, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+            
+            const result = await response.json();
+            
+            if (response.ok && result.status === 'success') {
+                updateStatus.value = result.message || t('settings.updateSuccess');
+            } else {
+                throw new Error(result.error || response.statusText);
+            }
+        }
+
+    } catch (error: any) {
+        console.error('Update action error:', error);
+        updateStatus.value = t('settings.updateError') + error.message;
+    } finally {
+        isUpdating.value = false;
     }
-  } catch (error) {
-    console.error('Update action error:', error);
-    updateStatus.value = t('settings.updateError') + error;
-  } finally {
-    isChecking.value = false;
-    isUpdating.value = false;
-  }
 };
 
 watch(() => props.visible, (newVal) => {
@@ -240,6 +266,18 @@ watch(() => props.visible, (newVal) => {
                 {{ t('settings.sections.data') }}
               </h3>
               
+              <div class="setting-item">
+                <div class="setting-info">
+                  <label class="setting-label">{{ t('settings.items.allowEditDefaultTags') || 'Allow Editing Default Tags' }}</label>
+                  <p class="setting-desc">{{ t('settings.items.allowEditDefaultTagsDesc') || 'Enable editing and deleting of default tags (Use with caution).' }}</p>
+                </div>
+                <label class="switch">
+                  <input type="checkbox" v-model="settings.allowEditDefaultTags">
+                  <span class="slider"></span>
+                </label>
+              </div>
+
+              <!-- Update from GitHub -->
               <div class="setting-item data-update-item">
                 <div class="setting-info">
                   <label class="setting-label">{{ t('settings.items.updateTags') }}</label>
@@ -249,23 +287,69 @@ watch(() => props.visible, (newVal) => {
                   <button 
                     class="btn-update primary" 
                     :disabled="isUpdating || isChecking"
-                    @click="handleUpdateAction"
+                    @click="handleDataUpdate('update_github')"
                   >
-                    <Icon v-if="isUpdating || isChecking" icon="mdi:loading" class="spin" />
+                    <Icon v-if="isUpdating && activeCategory === 'data'" icon="mdi:loading" class="spin" />
                     <span>{{ t('settings.updateNow') }}</span>
                   </button>
                 </div>
               </div>
 
-              <div v-if="updateStatus" class="update-status-box" :class="{ error: updateStatus.includes('failed'), success: updateStatus.includes('success') || updateStatus.includes('upToDate') }">
-                <Icon :icon="updateStatus.includes('success') || updateStatus.includes('upToDate') ? 'mdi:check-circle' : 'mdi:alert-circle'" />
+               <!-- NEW: Update Liked Tags Data -->
+              <div class="setting-item data-update-item">
+                <div class="setting-info">
+                  <label class="setting-label">{{ t('settings.items.updateLikedTags') || 'Update Liked Tags' }}</label>
+                  <p class="setting-desc">{{ t('settings.items.updateLikedTagsDesc') || 'Sync liked tags data with main database.' }}</p>
+                </div>
+                <div class="update-actions">
+                  <button 
+                    class="btn-update secondary" 
+                    :disabled="isUpdating"
+                    @click="handleDataUpdate('update_liked')"
+                  >
+                    <Icon icon="mdi:heart" />
+                    <span>{{ t('common.update') || 'Update' }}</span>
+                  </button>
+                </div>
+              </div>
+
+               <!-- NEW: Update User Tags Data -->
+              <div class="setting-item data-update-item">
+                <div class="setting-info">
+                  <label class="setting-label">{{ t('settings.items.updateUserTags') || 'Update User Tags' }}</label>
+                  <p class="setting-desc">{{ t('settings.items.updateUserTagsDesc') || 'Sync custom tags data with main database.' }}</p>
+                </div>
+                <div class="update-actions">
+                  <button 
+                    class="btn-update secondary" 
+                    :disabled="isUpdating"
+                    @click="handleDataUpdate('update_user')"
+                  >
+                    <Icon icon="mdi:account-tag" />
+                    <span>{{ t('common.update') || 'Update' }}</span>
+                  </button>
+                </div>
+              </div>
+
+              <div v-if="updateStatus" class="update-status-box" :class="{ error: updateStatus.includes('failed') || updateStatus.toLowerCase().includes('error'), success: updateStatus.includes('success') || updateStatus.includes('upToDate') || updateStatus.includes('updated') }">
+                <Icon :icon="updateStatus.includes('success') || updateStatus.includes('upToDate') || updateStatus.includes('updated') ? 'mdi:check-circle' : 'mdi:alert-circle'" />
                 <span>{{ updateStatus }}</span>
               </div>
             </div>
+
+
+          <!-- Section: Tag Manager -->
+          <div v-if="activeCategory === 'tagManager'" class="settings-section full-width">
+              <h3 class="section-title">
+              <Icon icon="mdi:tag-multiple" />
+              {{ t('settings.sections.tagManager') || 'Tag Manager' }}
+            </h3>
+            <TagManager />
           </div>
         </div>
+      </div>
 
-        <!-- Footer -->
+      <!-- Footer -->
         <div class="settings-footer">
           <div class="footer-info">
             <Icon icon="mdi:information-outline" />
@@ -418,6 +502,10 @@ watch(() => props.visible, (newVal) => {
   max-width: 500px;
 }
 
+.settings-section.full-width {
+  max-width: 100%;
+}
+
 .section-title {
   font-size: 18px;
   font-weight: 600;
@@ -518,9 +606,6 @@ input:checked + .slider:before {
 
 .btn-update {
   padding: 8px 16px;
-  background-color: #0075db;
-  color: white;
-  border: 1px solid #0075db;
   border-radius: 4px;
   cursor: pointer;
   font-size: 13px;
@@ -528,11 +613,26 @@ input:checked + .slider:before {
   align-items: center;
   gap: 8px;
   transition: all 0.2s;
+  background: transparent;
+  border: 1px solid #555;
+  color: #e0e0e0;
 }
 
-.btn-update:hover:not(:disabled) {
+.btn-update.primary {
+    background-color: #0075db;
+    border-color: #0075db;
+    color: white;
+}
+
+.btn-update.primary:hover:not(:disabled) {
   background-color: #0060b5;
   border-color: #0060b5;
+}
+
+.btn-update.secondary:hover:not(:disabled) {
+    background-color: #333;
+    border-color: #777;
+    color: white;
 }
 
 .btn-update:disabled {
@@ -563,6 +663,10 @@ input:checked + .slider:before {
 
 .update-status-box.error {
   border-left-color: #f44336;
+}
+
+.update-status-box.success {
+    border-left-color: #4CAF50;
 }
 
 /* Language Select */
