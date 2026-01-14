@@ -2,18 +2,13 @@
 import { ref, watch, onMounted } from 'vue';
 import ModalWrapper from './components/ModalWrapper.vue';
 import TextEditor from './components/TextEditor.vue';
-import VisualTagArea from './components/VisualTagArea.vue';
 import { textToTags, tagsToText } from './utils/promptParser';
 import type { TagItem } from './utils/types';
 import { DuckDBService } from './utils/duckdbService';
 
 const showModal = ref(false);
 const promptText = ref('1girl, solo, (masterpiece:1.2), best quality');
-const tags = ref<TagItem[]>([]);
 const dbStatus = ref('Initializing...');
-
-// Initialize tags from promptText
-tags.value = textToTags(promptText.value);
 
 onMounted(async () => {
     // Determine data URL based on environment
@@ -50,21 +45,6 @@ const saveChanges = () => {
     console.log("Saved prompt:", promptText.value);
     closeModal();
 };
-
-// Handle updates from VisualTagArea
-const handleTagsUpdate = (newTags: TagItem[]) => {
-    tags.value = newTags;
-    // Only update text when tags are modified via UI (not typing)
-    const newText = tagsToText(newTags);
-    if (newText !== promptText.value) {
-        promptText.value = newText;
-    }
-};
-
-// Watch promptText changes -> update tags
-watch(promptText, (newText) => {
-    tags.value = textToTags(newText);
-});
 </script>
 
 <template>
@@ -82,16 +62,8 @@ watch(promptText, (newText) => {
         @save="saveChanges"
     >
         <template #content>
-            <div style="display: flex; height: 100%;">
-                <!-- Left Pane: Text Editor -->
-                <div style="flex: 1; border-right: 1px solid #333; min-width: 300px;">
-                    <TextEditor v-model="promptText" />
-                </div>
-                
-                <!-- Right Pane: Visual Tag Area -->
-                <div style="flex: 1; min-width: 300px;">
-                    <VisualTagArea :tags="tags" @update:tags="handleTagsUpdate" />
-                </div>
+            <div style="width: 100%; height: 100%;">
+                <TextEditor v-model="promptText" />
             </div>
         </template>
     </ModalWrapper>
