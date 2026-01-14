@@ -4,7 +4,8 @@
     "save": "Save",
     "close": "Close",
     "done": "Done",
-    "confirm": "Confirm"
+    "confirm": "Confirm",
+    "update": "Update"
   },
   "settings": {
     "title": "Settings",
@@ -30,6 +31,10 @@
       "languageDesc": "Interface language",
       "updateTags": "Update Tags Data",
       "updateTagsDesc": "Download the latest tags.parquet from GitHub",
+      "updateLikedTags": "Update Liked Tags",
+      "updateLikedTagsDesc": "Sync liked tags data with main database.",
+      "updateUserTags": "Update User Tags",
+      "updateUserTagsDesc": "Sync custom user tags data with main database.",
       "updateTagsStatus": "Update Status",
       "updateNow": "Update Now",
       "updating": "Updating...",
@@ -59,6 +64,21 @@
       "unknown": "Unknown"
     },
     "addBtnTitle": "Add to prompt"
+  },
+  "customTag": {
+    "title": "Add Custom Tag",
+    "addBtnTitle": "Add New Tag",
+    "nameLabel": "Tag Name",
+    "namePlaceholder": "e.g., my_awesome_tag",
+    "categoryLabel": "Category",
+    "countLabel": "Post Count (Optional)",
+    "countHint": "Estimated usage frequency",
+    "aliasLabel": "Aliases (Optional)",
+    "aliasPlaceholder": "Comma-separated, e.g., tag1, tag2",
+    "aliasHint": "Alternative names to search for this tag",
+    "errorNameRequired": "Tag name is required",
+    "errorGeneric": "Failed to add tag",
+    "successAdded": "Tag added successfully!"
   },
   "editor": {
     "copy": "Copy",

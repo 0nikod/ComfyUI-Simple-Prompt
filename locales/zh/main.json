@@ -4,7 +4,8 @@
     "save": "保存",
     "close": "关闭",
     "done": "完成",
-    "confirm": "确认"
+    "confirm": "确认",
+    "update": "更新"
   },
   "settings": {
     "title": "设置",
@@ -30,6 +31,10 @@
       "languageDesc": "界面语言",
       "updateTags": "更新标签数据",
       "updateTagsDesc": "从 GitHub 下载最新的 tags.parquet",
+      "updateLikedTags": "更新喜爱标签数据",
+      "updateLikedTagsDesc": "同步喜爱标签的统计数据与主数据库。",
+      "updateUserTags": "更新自定义标签数据",
+      "updateUserTagsDesc": "同步自定义标签的统计数据与主数据库。",
       "updateTagsStatus": "更新状态",
       "updateNow": "立即更新",
       "updating": "更新中...",
@@ -59,6 +64,21 @@
       "unknown": "未知"
     },
     "addBtnTitle": "添加到prompt"
+  },
+  "customTag": {
+    "title": "添加自定义标签",
+    "addBtnTitle": "添加新标签",
+    "nameLabel": "标签名称",
+    "namePlaceholder": "例如: my_awesome_tag",
+    "categoryLabel": "分类",
+    "countLabel": "帖子计数 (可选)",
+    "countHint": "估计的使用频率",
+    "aliasLabel": "别名 (可选)",
+    "aliasPlaceholder": "逗号分隔，例如: tag1, tag2",
+    "aliasHint": "搜索此标签时可使用的替代名称",
+    "errorNameRequired": "标签名称必填",
+    "errorGeneric": "添加标签失败",
+    "successAdded": "标签添加成功！"
   },
   "editor": {
     "copy": "复制",

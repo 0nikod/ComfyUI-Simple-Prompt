@@ -81,10 +81,6 @@ onUnmounted(() => {
             <span>{{ t('editor.subtitle') }}</span>
           </div>
           <div class="sp-modal-actions">
-            <!-- Add Custom Tag Button -->
-            <button class="sp-btn-icon" :title="t('customTag.addBtnTitle')" @click="openCustomTag">
-              <Icon icon="mdi:tag-plus" />
-            </button>
             <button class="sp-btn-icon" :title="t('settings.title')" @click="openSettings">
               <Icon icon="mdi:cog" />
             </button>
@@ -96,7 +92,7 @@ onUnmounted(() => {
 
         <!-- Body (Split View) -->
         <div class="sp-modal-body">
-            <slot name="content"></slot>
+            <slot name="content" :openCustomTag="openCustomTag"></slot>
         </div>
 
         <!-- Footer -->
