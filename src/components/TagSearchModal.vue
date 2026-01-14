@@ -11,6 +11,16 @@ const props = defineProps<{
 
 const { t } = useI18n();
 
+const emit = defineEmits<{
+  (e: 'close'): void;
+  (e: 'add-tag', name: string, category: number): void;
+}>();
+
+const searchQuery = ref('');
+const searchResults = ref<any[]>([]);
+const loading = ref(false);
+const selectedCategories = ref<number[]>([]);
+
 // Category options
 const categoryOptions = computed(() => [
   { value: TagCategory.GENERAL, label: t('search.categories.general'), color: CATEGORY_COLORS[TagCategory.GENERAL] },
