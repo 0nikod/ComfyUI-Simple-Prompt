@@ -77,7 +77,7 @@ export class DuckDBService {
         }
     }
 
-    public async searchTags(query: string, limit: number = 20, useAliases: boolean = false): Promise<any[]> {
+    public async searchTags(query: string, limit: number = 20, useAliases: boolean = false, categories: number[] = []): Promise<any[]> {
         if (!this.conn) return [];
 
         // Sanitize query to prevent basic injection (though this is WASM client-side)
@@ -85,15 +85,27 @@ export class DuckDBService {
 
         let aliasClause = '';
         if (useAliases) {
-            // Assuming alias column is a list of strings
-            aliasClause = `OR list_contains(alias, '${safeQuery}')`;
+            // Use EXISTS with unnest to check if any alias contains the query (infix match)
+            // This allows fuzzy matching in aliases, similar to name ILIKE
+            aliasClause = `OR EXISTS (
+                SELECT 1 FROM unnest(alias) AS a(alias_value) 
+                WHERE alias_value ILIKE '%${safeQuery}%'
+            )`;
+        }
+
+        // Add category filter if categories are specified
+        let categoryClause = '';
+        if (categories.length > 0) {
+            const categoryList = categories.join(',');
+            categoryClause = `AND category IN (${categoryList})`;
         }
 
         // Optimized query: No ORDER BY, relying on pre-sorted parquet (by post_count DESC)
-        // We just need to filter by name (infix match) or alias
+        // We filter by name (infix match) or alias, and optionally by category
         const sql = `
             SELECT * FROM tags
-            WHERE name ILIKE '%${safeQuery}%' ${aliasClause}
+            WHERE (name ILIKE '%${safeQuery}%' ${aliasClause})
+            ${categoryClause}
             LIMIT ${limit}
         `;
 
@@ -105,18 +117,39 @@ export class DuckDBService {
             // Mark results that matched by alias if needed
             if (useAliases) {
                 return results.map(row => {
-                    const matchedAlias = row.alias && row.alias.includes(safeQuery) ? safeQuery : null; // Simple check
-                    // More complex check might be needed if exact match logic matters, 
-                    // but for now just returning the row is enough. 
-                    // The UI handles showing alias if needed (optional)
-                    if (matchedAlias) {
-                        // duckdb-wasm result objects might be read-only or special types
-                        // safe to spread?
-                        return { ...row, alias_match: 'alias' };
+                    // Check if the name itself matches (case-insensitive)
+                    // Use original query, not safeQuery (which has escaped quotes)
+                    const nameMatches = row.name && row.name.toLowerCase().includes(query.toLowerCase());
+
+                    // DuckDB returns LIST columns as array-like objects, not true JavaScript arrays
+                    // Convert to array if it has a length property
+                    let aliasArray: string[] = [];
+                    if (row.alias && typeof row.alias === 'object' && 'length' in row.alias) {
+                        aliasArray = Array.from(row.alias as any);
                     }
+
+
+                    // If name matches, it's a direct match, not alias match
+                    if (nameMatches) {
+                        return row;
+                    }
+
+                    // Otherwise, check if alias matched
+                    if (aliasArray.length > 0) {
+                        // Find the specific alias that matched
+                        const matchedAlias = aliasArray.find((a: string) =>
+                            a && a.toLowerCase().includes(query.toLowerCase())
+                        );
+
+                        if (matchedAlias) {
+                            return { ...row, matched_alias: matchedAlias };
+                        }
+                    }
+
                     return row;
                 });
             }
+
 
             return results;
         } catch (error) {

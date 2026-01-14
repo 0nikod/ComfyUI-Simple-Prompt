@@ -57,13 +57,8 @@ const performSearch = async () => {
   loading.value = true;
   try {
     const db = DuckDBService.getInstance();
-    // Use searchTags with alias support
-    let results = await db.searchTags(query, 50, true); // Include aliases
-    
-    // Filter by selected categories if any
-    if (selectedCategories.value.length > 0) {
-      results = results.filter(tag => selectedCategories.value.includes(tag.category));
-    }
+    // Use searchTags with alias support and category filter
+    const results = await db.searchTags(query, 50, true, selectedCategories.value);
     
     searchResults.value = results;
   } catch (error) {
@@ -113,6 +108,19 @@ const getCategoryLabel = (category: number) => {
 // Get category color
 const getCategoryColor = (category: number) => {
   return CATEGORY_COLORS[category] || '#888';
+};
+
+// Format post count (cached to avoid repeated toLocaleString calls)
+const formatPostCount = (count: number | undefined) => {
+  return count?.toLocaleString() || '0';
+};
+
+// Highlight matched text with bold
+const highlightMatch = (text: string, query: string): string => {
+  if (!query || !text) return text;
+  
+  const regex = new RegExp(`(${query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi');
+  return text.replace(regex, '<strong class="match-bold">$1</strong>');
 };
 </script>
 
@@ -187,22 +195,25 @@ const getCategoryColor = (category: number) => {
               v-for="tag in searchResults"
               :key="tag.id"
               class="result-item"
+              :style="{ '--cat-color': getCategoryColor(tag.category) }"
               @click="addTag(tag)"
             >
               <div class="tag-info">
                 <div class="tag-name-row">
-                  <span
-                    class="category-indicator"
-                    :style="{ backgroundColor: getCategoryColor(tag.category) }"
-                  ></span>
-                  <span class="tag-name">{{ tag.name }}</span>
-                  <span v-if="tag.alias" class="alias-badge">别名</span>
+                  <span class="category-indicator"></span>
+                  <span class="tag-name">
+                    <span v-if="!tag.matched_alias" v-html="highlightMatch(tag.name, searchQuery)"></span>
+                    <template v-else>
+                      <span v-html="highlightMatch(tag.name, searchQuery)"></span>
+                      <span class="alias-indicator" v-html="highlightMatch(tag.matched_alias, searchQuery)"></span>
+                    </template>
+                  </span>
                 </div>
                 <div class="tag-meta">
                   <span class="category-label">{{ getCategoryLabel(tag.category) }}</span>
                   <span class="post-count">
                     <Icon icon="mdi:image-multiple" />
-                    {{ tag.post_count?.toLocaleString() || 0 }}
+                    {{ formatPostCount(tag.post_count) }}
                   </span>
                 </div>
               </div>
@@ -223,6 +234,13 @@ const getCategoryColor = (category: number) => {
 </template>
 
 <style scoped>
+/* Match text bold style */
+.tag-name :deep(.match-bold) {
+  font-weight: 700;
+  text-decoration: underline;
+  text-decoration-color: #0075db;
+}
+
 .modal-overlay {
   position: fixed;
   top: 0;
@@ -456,7 +474,10 @@ const getCategoryColor = (category: number) => {
   border: 1px solid #444;
   border-radius: 6px;
   cursor: pointer;
-  transition: all 0.2s;
+  /* 只对需要动画的属性添加过渡,避免滚动时的性能损耗 */
+  transition: background-color 0.15s, border-color 0.15s, transform 0.15s;
+  /* GPU加速提示 */
+  will-change: transform;
 }
 
 .result-item:hover {
@@ -483,12 +504,21 @@ const getCategoryColor = (category: number) => {
   height: 8px;
   border-radius: 50%;
   flex-shrink: 0;
+  /* 使用CSS变量代替内联样式,减少Vue的样式计算 */
+  background-color: var(--cat-color, #888);
 }
 
 .tag-name {
   font-size: 14px;
   font-weight: 500;
   color: #e0e0e0;
+}
+
+.alias-indicator {
+  color: #888;
+  font-size: 12px;
+  font-weight: 400;
+  margin-left: 6px;
 }
 
 .alias-badge {
