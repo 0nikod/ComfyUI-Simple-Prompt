@@ -116,3 +116,5 @@ node.zip
 
 # duckdb
 data/*
+
+uv.lock
