@@ -45,7 +45,7 @@ const formatCount = (count: number | bigint) => {
     <template v-else>
       <div 
         v-for="(item, index) in items" 
-        :key="item.id"
+        :key="item.name"
         class="menu-item"
         :class="{ selected: index === selectedIndex }"
         @click="handleSelect(item)"

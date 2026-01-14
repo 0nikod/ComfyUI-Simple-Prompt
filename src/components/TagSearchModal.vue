@@ -195,7 +195,7 @@ const highlightMatch = (text: string, query: string): string => {
           <div v-else-if="searchResults.length > 0" class="results-list">
             <div
               v-for="tag in searchResults"
-              :key="tag.id"
+              :key="tag.name"
               class="result-item"
               :style="{ '--cat-color': getCategoryColor(tag.category) }"
               @click="addTag(tag)"
