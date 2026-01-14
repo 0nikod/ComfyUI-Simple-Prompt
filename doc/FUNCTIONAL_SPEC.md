@@ -54,7 +54,7 @@
     *   **可视化 -> 输入**: 重构字符串 `(text:weight), text`。
 
 3.  **标签补全与搜索 (Autocomplete & Search)**
-    *   **数据源**: `tags.parquet` (列式存储格式)。
+    *   **数据源**: `data/tags.parquet` (默认存放于插件根目录下的 `data` 文件夹)。
     *   **引擎**: 前端 WASM (使用 `@duckdb/duckdb-wasm`)。
         *   **理由**: 快速、压缩效率高、无需 Python 后端处理（零延迟搜索打字体验）。
     *   **数据模型 (Schema)**:
@@ -207,6 +207,30 @@ class SimplePrompt:
 *   **缓存策略**:
     *   Parquet 文件通过 Service Worker 缓存 (Cache-First)
     *   热门查询结果内存缓存 (LRU, 100 条)
+
+### 3.6 独立开发环境 (Development Environment)
+为了提高前端开发效率，项目将包含一个独立的开发环境，允许在不运行 ComfyUI 的情况下开发和调试编辑器界面。
+
+*   **入口 (Entry Point)**: `index.html` (仅用于开发)。
+*   **模拟层 (Mock Layer)**: `src/dev.ts`
+    *   **模拟 ComfyUI API**: 提供 `app`, `api` 等对象的 Mock 实现。
+    *   **模拟节点交互**: 模拟 `node.addWidget` 和 Widget 值的读写。
+*   **启动方式**: `npm run dev` (通过 Vite 开发服务器启动)。
+*   **优势**:
+    *   **热重载 (HMR)**: 毫秒级界面更新。
+    *   **独立调试**: 使用浏览器标准 DevTools 调试 Vue 组件和 DuckDB-WASM，不受 ComfyUI 环境干扰。
+
+### 3.7 数据管理策略 (Data Management Strategy)
+*   **文件存放位置**: 
+    *   核心数据库: `custom_nodes/comfyui_simple_prompt/data/tags.parquet`
+    *   自定义数据: `custom_nodes/comfyui_simple_prompt/data/custom/*.parquet` (未来支持)
+*   **自动更新 (Auto-Update)**:
+    *   **机制**: 节点初始化时检查 GitHub Releases。
+    *   **逻辑**: 对比本地文件的 Hash 或版本号，若发现新版本则自动下载/覆盖。
+    *   **代理支持**: 考虑到网络环境，应支持配置 GitHub 代理/镜像地址。
+*   **自定义数据 (Custom Data)**:
+    *   允许用户在 `data/custom` 目录下放入格式兼容的 Parquet 文件，前端 DuckDB 加载时自动合并查询。
+
 
 ## 4. 技术栈 (Tech Stack)
 *   **核心**: Vue 3 + Vite (构建输出至 `dist/style.css` & `dist/simple-prompt.js`)。
