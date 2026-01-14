@@ -175,6 +175,141 @@ async def search_tags_api(request):
         return web.json_response([], status=500)
 
 
+@PromptServer.instance.routes.get("/simple-prompt/check-update")
+async def check_update_api(request):
+    import aiohttp
+    import hashlib
+
+    release_url = "https://api.github.com/repos/0nikod/danbooru_tag_process/releases/latest"
+
+    # 1. Calculate local SHA256
+    local_sha256 = ""
+    if os.path.exists(PARQUET_PATH):
+        try:
+            sha256_hash = hashlib.sha256()
+            with open(PARQUET_PATH, "rb") as f:
+                for byte_block in iter(lambda: f.read(4096), b""):
+                    sha256_hash.update(byte_block)
+            local_sha256 = sha256_hash.hexdigest()
+        except Exception as e:
+            logger.error(f"Error calculating local SHA256: {e}")
+
+    try:
+        async with aiohttp.ClientSession() as session:
+            # 2. Fetch latest release info
+            headers = {"User-Agent": "ComfyUI-Simple-Prompt"}
+            async with session.get(release_url, headers=headers) as resp:
+                if resp.status != 200:
+                    return web.json_response({"error": f"Failed to fetch release info: {resp.status}"}, status=500)
+                release_info = await resp.json()
+
+            # 3. Find asset and its digest
+            target_asset = None
+            asset_names = ["tags_processed.parquet", "tags.parquet"]
+            for name in asset_names:
+                for asset in release_info.get("assets", []):
+                    if asset.get("name") == name:
+                        target_asset = asset
+                        break
+                if target_asset:
+                    break
+
+            if not target_asset:
+                return web.json_response({"error": "Tag data file not found in the latest release"}, status=404)
+
+            # GitHub provides digest in the asset info for some repositories or
+            # we can use the 'digest' field if it exists (like in the user's provided JSON)
+            # It looks like "digest": "sha256:..."
+            remote_digest = target_asset.get("digest", "")
+            if remote_digest.startswith("sha256:"):
+                remote_sha256 = remote_digest[7:]
+            else:
+                # If not in digest field, we might not be able to compare without downloading
+                # But in the user's JSON, it IS there.
+                remote_sha256 = remote_digest
+
+            update_available = local_sha256 != remote_sha256
+
+            return web.json_response(
+                {
+                    "update_available": update_available,
+                    "local_sha256": local_sha256,
+                    "remote_sha256": remote_sha256,
+                    "version": release_info.get("tag_name", "unknown"),
+                    "name": release_info.get("name", ""),
+                }
+            )
+
+    except Exception as e:
+        logger.error(f"Check update error: {e}")
+        return web.json_response({"error": str(e)}, status=500)
+
+
+@PromptServer.instance.routes.post("/simple-prompt/update-tags")
+async def update_tags_api(request):
+    import aiohttp
+    import json
+
+    try:
+        data = await request.json()
+    except:
+        data = {}
+
+    release_url = data.get("url", "https://api.github.com/repos/0nikod/danbooru_tag_process/releases/latest")
+
+    try:
+        async with aiohttp.ClientSession() as session:
+            # 1. Fetch release info
+            headers = {"User-Agent": "ComfyUI-Simple-Prompt"}
+            async with session.get(release_url, headers=headers) as resp:
+                if resp.status != 200:
+                    return web.json_response({"error": f"Failed to fetch release info: {resp.status}"}, status=500)
+                release_info = await resp.json()
+
+            # 2. Find tags.parquet or tags_processed.parquet asset
+            download_url = None
+            asset_names = ["tags_processed.parquet", "tags.parquet"]
+            for name in asset_names:
+                for asset in release_info.get("assets", []):
+                    if asset.get("name") == name:
+                        download_url = asset.get("browser_download_url")
+                        break
+                if download_url:
+                    break
+
+            if not download_url:
+                return web.json_response({"error": "Tag data file not found in the latest release"}, status=404)
+
+            # 3. Download the file
+            async with session.get(download_url) as resp:
+                if resp.status != 200:
+                    return web.json_response({"error": f"Failed to download tags.parquet: {resp.status}"}, status=500)
+
+                content = await resp.read()
+
+                # Ensure data directory exists
+                os.makedirs(DATA_DIR, exist_ok=True)
+
+                # Save to a temporary file first to avoid corruption
+                temp_path = PARQUET_PATH + ".tmp"
+                with open(temp_path, "wb") as f:
+                    f.write(content)
+
+                # Replace the old file
+                if os.path.exists(PARQUET_PATH):
+                    os.remove(PARQUET_PATH)
+                os.rename(temp_path, PARQUET_PATH)
+
+            # 4. Re-initialize DuckDB
+            init_duckdb()
+
+            return web.json_response({"status": "success", "message": "Tags updated successfully"})
+
+    except Exception as e:
+        logger.error(f"Update tags error: {e}")
+        return web.json_response({"error": str(e)}, status=500)
+
+
 class SimplePrompt:
     """
     A simple prompt node with an advanced visual tag editor.

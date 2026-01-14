@@ -12,7 +12,8 @@
       "textFormat": "文本格式",
       "autocomplete": "补全与搜索",
       "editing": "编辑行为",
-      "interface": "界面"
+      "interface": "界面",
+      "data": "数据管理"
     },
     "items": {
       "convertUnderscore": "下划线转空格",
@@ -26,7 +27,19 @@
       "smartBackspace": "智能退格",
       "smartBackspaceDesc": "删除标签最后一个字符时，连同前面的逗号和空格一起删除",
       "language": "语言",
-      "languageDesc": "界面语言"
+      "languageDesc": "界面语言",
+      "updateTags": "更新标签数据",
+      "updateTagsDesc": "从 GitHub 下载最新的 tags.parquet",
+      "updateTagsStatus": "更新状态",
+      "updateNow": "立即更新",
+      "updating": "更新中...",
+      "updateSuccess": "更新成功！",
+      "updateError": "更新失败：",
+      "currentVersion": "当前版本",
+      "checkingUpdate": "正在检查更新...",
+      "upToDate": "已是最新：",
+      "updateAvailable": "有可用更新：",
+      "unknown": "未知"
     },
     "autoSave": "设置会自动保存"
   },

@@ -12,7 +12,8 @@
       "textFormat": "Text Formatting",
       "autocomplete": "Autocomplete & Search",
       "editing": "Editing Behavior",
-      "interface": "Interface"
+      "interface": "Interface",
+      "data": "Data Management"
     },
     "items": {
       "convertUnderscore": "Convert Underscore to Space",
@@ -26,7 +27,19 @@
       "smartBackspace": "Smart Backspace",
       "smartBackspaceDesc": "When deleting the last character of a tag, also remove preceding comma and space",
       "language": "Language",
-      "languageDesc": "Interface language"
+      "languageDesc": "Interface language",
+      "updateTags": "Update Tags Data",
+      "updateTagsDesc": "Download the latest tags.parquet from GitHub",
+      "updateTagsStatus": "Update Status",
+      "updateNow": "Update Now",
+      "updating": "Updating...",
+      "updateSuccess": "Update successful!",
+      "updateError": "Update failed: ",
+      "currentVersion": "Current Version",
+      "checkingUpdate": "Checking for updates...",
+      "upToDate": "Latest version: ",
+      "updateAvailable": "Update available: ",
+      "unknown": "Unknown"
     },
     "autoSave": "Settings are saved automatically"
   },
