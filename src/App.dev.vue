@@ -20,7 +20,7 @@ onMounted(async () => {
     try {
         const db = DuckDBService.getInstance();
         await db.init();
-        await db.loadTagsFile(dataUrl);
+
         dbStatus.value = 'Ready';
         
         // Test search

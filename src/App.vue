@@ -31,7 +31,7 @@ onMounted(async () => {
         await db.init();
         // Backend handles file loading now, so we don't need to pass a URL or loadTagsFile might be no-op.
         // Let's check DuckDBService.ts content again if needed, but assuming it's correctly refactored.
-        await db.loadTagsFile(''); 
+
         dbStatus.value = 'Ready';
     } catch (e) {
         console.error("DB Error:", e);

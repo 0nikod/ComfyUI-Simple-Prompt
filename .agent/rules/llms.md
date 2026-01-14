@@ -2,4 +2,7 @@
 trigger: always_on
 ---
 
-Always read https://docs.comfy.org/llms.txt before perform tasks.
+Always read official documents before perform tasks.
+
+- <https://docs.comfy.org/llms.txt>
+- <https://docs.comfy.org/development/overview.md>

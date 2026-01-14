@@ -55,8 +55,9 @@
 
 3.  **标签补全与搜索 (Autocomplete & Search)**
     *   **数据源**: `data/tags.parquet` (默认存放于插件根目录下的 `data` 文件夹)。
-    *   **引擎**: 前端 WASM (使用 `@duckdb/duckdb-wasm`)。
-        *   **理由**: 快速、压缩效率高、无需 Python 后端处理（零延迟搜索打字体验）。
+    *   **引擎**: 后端 DuckDB (使用 Python `duckdb` 库)。
+        *   **理由**: 统一数据管理，利用 Python 服务器性能，简化前端依赖，提高大文件处理效率。
+    *   **通信方式**: 前端通过 REST API (`/simple-prompt/search-tags`) 发起异步请求。
     *   **数据模型 (Schema)**:
         | 列名 (Column) | 类型 (Type) | 描述 (Description) |
         | :--- | :--- | :--- |
@@ -65,7 +66,6 @@
         | `category`| `int64` | Danbooru 分类枚举 (见下表) |
         | `post_count` | `int64` | 使用次数 (热度) |
         | `alias` | `list[string]` | 别名列表 |
-        | `is_deprecated` | `bool` | 是否已弃用 |
     
     *   **分类枚举 (Category Enum - Danbooru 标准)**:
         | 值 | 名称 | 颜色 |
@@ -169,7 +169,7 @@ class SimplePrompt:
         }
     });
     ```
-*   **通信**: 纯前端逻辑，除了初始标签库加载（可静态打包）外，无需 Python 交互。
+*   **通信**: 前端与后端通过标准 REST API 交互。所有复杂的 SQL 查询均在 Python 层的 DuckDB 中执行。
 
 ### 3.3 设置持久化 (Settings Persistence)
 *   **存储方式**: 使用 `localStorage` 保存用户偏好设置。
@@ -191,22 +191,27 @@ class SimplePrompt:
 ### 3.4 错误处理 (Error Handling)
 | 场景 | 处理方式 |
 | :--- | :--- |
-| `tags.parquet` 加载失败 | 显示 Toast 提示，禁用补全功能，允许手动输入 |
-| DuckDB-WASM 初始化失败 | 回退到简单前缀匹配（内存中小型缓存） |
+| `tags.parquet` 加载失败 | 显示日志错误，禁用搜索相关 API，提示用户检查文件 |
+| 后端 DuckDB 初始化失败 | 检查 Python 环境依赖（如 duckdb 库是否安装），控制台输出错误日志 |
 | 无效权重值 (负数/NaN) | 自动修正为 `1.0` 并显示警告 |
 | 解析错误 (畸形括号) | 保留原始文本，标记为"未解析"标签 |
 
+### 3.5 安全性防护 (Security)
+*   **SQL 注入防护**: 后端所有对 DuckDB 的查询必须使用参数化查询（Parameterized Queries），严禁直接进行字符串拼接。
+*   **输入验证**: API 接口对传入的参数（如 `limit`, `categories`）进行严格的类型转换和合法性检查。
+*   **路径安全**: 数据文件路径在初始化时进行验证，确保其位于插件目录内。
+
+### 3.6 规范合规性 (Compliance)
+*   **ComfyUI V3 Schema**: 项目目前采用成熟的 V1 架构。经过评估，当前功能在 V1 下运行良好且稳定。V3 迁移已被列入长期路线图，作为可选优化项。
+*   **llms.txt 符合性**: 项目结构和代码路径遵循 ComfyUI 官方推荐的规范，确保与开发者工具和自动文档系统的兼容性。
+
 ### 3.5 性能考虑 (Performance Considerations)
 *   **标签库加载**:
-    *   首次加载预计时间: < 500ms (典型 ~5MB Parquet 文件)
-    *   使用 Web Worker 避免阻塞主线程
-    *   加载期间显示进度指示器
+    - 后端启动时自动连接并初始化 `data/tags.parquet`。
+    - 前端无需加载完整的 Parquet 文件，仅按需请求搜索结果。
 *   **搜索延迟**:
     *   输入防抖: 150ms
-    *   查询超时: 500ms (超时则显示部分结果)
-*   **缓存策略**:
-    *   Parquet 文件通过 Service Worker 缓存 (Cache-First)
-    *   热门查询结果内存缓存 (LRU, 100 条)
+    *   API 响应通常在 10-50ms 内完成。
 
 ### 3.6 独立开发环境 (Development Environment)
 为了提高前端开发效率，项目将包含一个独立的开发环境，允许在不运行 ComfyUI 的情况下开发和调试编辑器界面。
@@ -218,7 +223,7 @@ class SimplePrompt:
 *   **启动方式**: `npm run dev` (通过 Vite 开发服务器启动)。
 *   **优势**:
     *   **热重载 (HMR)**: 毫秒级界面更新。
-    *   **独立调试**: 使用浏览器标准 DevTools 调试 Vue 组件和 DuckDB-WASM，不受 ComfyUI 环境干扰。
+    *   **独立调试**: 使用浏览器标准 DevTools 调试 Vue 组件和后端 API 通信，不受 ComfyUI 环境干扰。
 
 ### 3.7 数据管理策略 (Data Management Strategy)
 *   **文件存放位置**: 
@@ -240,7 +245,7 @@ class SimplePrompt:
 
 ### 4.1 国际化 (Internationalization)
 *   **ComfyUI 标准 (ComfyUI Standard)**:
-    *   使用 `locales/en/nodeDefs.json` & `locales/zh/nodeDefs.json` 用于节点名称和组件标签翻译。
+    *   使用 `locales/en/main.json` & `locales/zh/main.json` 用于界面翻译。
     *   遵循 ComfyUI 原生翻译规范。
 *   **Simple Prompt 模态窗口**:
     *   Vue 应用内部使用 `vue-i18n`。
@@ -269,24 +274,23 @@ class SimplePrompt:
 ```json
 {
   "dependencies": {
-    "vue": "^3.4.0",
+    "vue": "^3.5.0",
     "vue-i18n": "^9.0.0",
-    "@duckdb/duckdb-wasm": "^1.28.0",
-    "@iconify/vue": "^4.1.0"
+    "@iconify/vue": "^5.0.0"
   },
   "devDependencies": {
-    "vite": "^5.0.0",
-    "typescript": "^5.3.0"
+    "vite": "^6.0.0",
+    "typescript": "^5.0.0"
   }
 }
 ```
 
 ### 6.3 构建产物 (Build Artifacts)
 ```
-dist/
-├── simple-prompt.js      # 主入口 (ES Module)
-├── simple-prompt.css     # 样式
-└── chunks/
-    └── duckdb-*.wasm     # DuckDB WASM 二进制
+js/
+├── main.js      # 主入口 (ES Module)
+└── assets/      # 样式与静态资源
 ```
 
+---
+*最后更新日期: 2026-01-14*

@@ -18,10 +18,7 @@ export class DuckDBService {
         this.isInitialized = true;
     }
 
-    public async loadTagsFile(_url: string): Promise<void> {
-        // Backend handles loading, this is now a no-op to maintain API compatibility
-        console.log("[DuckDB] loadTagsFile called (no-op in backend mode)");
-    }
+
 
     public async searchTags(query: string, limit: number = 20, useAliases: boolean = false, categories: number[] = []): Promise<any[]> {
         const params = new URLSearchParams({

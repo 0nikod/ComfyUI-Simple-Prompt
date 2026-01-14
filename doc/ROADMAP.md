@@ -1,86 +1,22 @@
 # ComfyUI Simple Prompt 开发路线图 (Roadmap)
 
-基于 `doc/FUNCTIONAL_SPEC.md` 设计文档与当前项目状态制定。
+## 1. 近期目标 (Short-term)
+- [x] **架构迁移**：从前端 WASM DuckDB 迁移至后端 Python DuckDB，提升启动速度和兼容性。
+- [x] **项目清理**：移除冗余组件和过时的 WASM 依赖。 (已完成 - 2026-01-14)
+- [ ] **V3 架构迁移**：评估并在合适时机将节点定义迁移至 ComfyUI V3 schema。
+- [ ] **性能优化**：对搜索 API 进行压力测试，确保在超大标签库下的响应速度。
+- [ ] **图标增强**：为不同类型的标签添加更具辨识度的 Icon。
 
-## 阶段 1: 基础架构搭建 (Phase 1: Infrastructure Initialization)
-**目标**: 确保项目骨架完整，Python 节点与前端构建流程打通。
+## 2. 中期目标 (Mid-term)
+- [ ] **自定义标签库**：支持用户在 `data/custom` 目录下上传自己的 Parquet 文件，并自动合并查询。
+- [ ] **多层级分类**：支持更复杂的标签嵌套和层级显示。
+- [ ] **Prompt 模板**：允许用户保存常用的提示词片段，并通过搜索快速插入。
+- [ ] **权重拖拽**：在可视化界面支持通过鼠标拖拽直接调整标签权重。
 
-- [x] **Python 节点实现**
-  - [x] 重命名/重构 `ComfyUIFEExampleVueBasic.py` 为 `simple_prompt.py`。
-  - [x] 实现 `SimplePrompt` 类，定义 `INPUT_TYPES` (含 `prompt_text`) 和基本 `run` 方法。
-  - [x] 确保节点在 ComfyUI 中正确注册并可见。
-- [x] **前端工程化**
-  - [x] 创建前端入口文件 `src/main.ts`。
-  - [x] 验证 `vite.config.mts` 构建配置，确保输出 `js/main.js` 能被 ComfyUI 加载。
-  - [x] 实现 `app.registerExtension` 逻辑，在 `SimplePrompt` 节点上添加 "Edit Prompt" 按钮。
+## 3. 长期愿景 (Long-term)
+- [ ] **模型集成**：通过本地小模型实现提示词的智能联想和扩写。
+- [ ] **社区集成**：支持从 Civitai 或其他平台一键导入流行的 Prompt 模板。
+- [ ] **全平台适配**：确保编辑器在不同分辨率和触控屏幕上均有良好的体验。
 
-## 阶段 1.5: 独立开发环境 (Phase 1.5: Standalone Dev Environment)
-**目标**: 允许在不启动 ComfyUI 的情况下开发和调试前端界面。
-
-- [x] **独立入口配置**
-  - [x] 创建 `index.html` 作为开发服务器入口。
-  - [x] 创建 `src/dev.ts` 用于模拟 ComfyUI 环境（Mock Node/App 对象）。
-  - [x] 配置 `vite.config.mts` 支持开发服务器模式 (`npm run dev`)。
-
-
-## 阶段 2: 核心界面开发 (Phase 2: Core UI Development)
-**目标**: 实现模态窗口编辑器框架，完成基本的布局。
-
-- [x] **模态窗口组件 (Modal Wrapper)**
-  - [x] 创建全屏覆盖的 Vue 组件。
-  - [x] 实现打开/关闭逻辑。
-  - [x] 基础布局：Header (标题, 设置, 关闭), Body (Split View), Footer (信息统计)。
-- [x] **文本编辑器 (Text Editor)**
-  - [x] 左侧 `CodeMirror` 代码编辑器组件，支持 ComfyUI 风格语法高亮。
-  - [x] 实现与节点 widget 值的双向绑定。
-- [x] **可视化标签区 (Visual Tag Area)**
-  - [x] 右侧可折叠/缩放的 Flex 容器布局。
-  - [x] `TagItem` 组件开发 (显示文本、权重操作、颜色分类)。
-
-## 阶段 3: 数据集成与 DuckDB (Phase 3: Data & Logic)
-**目标**: 集成 DuckDB-WASM 并加载 `tags_processed.parquet` 数据。
-
-- [x] **DuckDB-WASM 集成**
-  - [x] 安装 `@duckdb/duckdb-wasm`, `duckdb-async` 等依赖。
-  - [x] 编写 DuckDB 服务层 (Service Layer)，处理初始化与异步查询。
-  - [x] 配置 Vite 以正确处理 WASM 文件资源路径。
-- [x] **数据加载**
-  - [x] 确保 `tags_processed.parquet` 可被前端访问。
-  - [x] 实现数据加载与索引构建策略。
-
-
-## 阶段 4: 解析器与双向绑定 (Phase 4: Parser & Logic)
-**目标**: 实现 Prompt 文本与 Tag 对象之间的无缝转换。
-
-- [x] **解析器 (Parser)**
-  - [x] 实现 `textToTags(text)`: 复杂正则解析 `(tag:1.2)` 格式与嵌套括号。
-  - [x] 实现 `tagsToText(tags)`: 序列化回字符串。
-- [x] **交互同步**
-  - [x] 文本编辑时实时更新 Tag 视图（防抖处理）。
-  - [x] 操作 Tag (删除、权重调整、拖拽重排) 时实时更新文本。
-
-## 阶段 5: 高级功能 (Phase 5: Advanced Features)
-**目标**: 实现补全、设置与国际化。
-
-- [x] **自动补全 (Autocomplete)**
-  - [x] 基于 DuckDB 的模糊查询（支持拼音、首字母模糊匹配）。
-  - [x] 补全 UI 下拉菜单，显示 Tag 类型、中文释义、使用计数。
-  - [x] 键盘导航支持 (`Tab`, `Enter`, `Up`, `Down`).
-- [x] **用户设置**
-  - [x] 实现设置面板，支持实时预览。
-  - [x] `localStorage` 持久化 (智能退格、下划线转换、Lora/Embedding 提示等选项)。
-- [x] **国际化 (i18n)**
-  - [x] 配置 `vue-i18n`。
-  - [x] 完善中英文翻译资源，支持动态切换。
-- [x] **数据管理增强 (Data Management)**
-  - [x] 实现 `tags_processed.parquet` 自动更新逻辑 (Python 脚本集成)。
-  - [/] 支持自定义数据文件加载 (正在进行中)。
-
-
-## 阶段 6: 测试与优化 (Phase 6: Polish)
-**目标**: 修复 Bug，优化性能，准备发布。
-
-- [ ] **性能优化**: 确保超长 Prompt 加载不卡顿，优化图标资源加载。
-- [ ] **样式微调**: 进一步适配 ComfyUI 多套暗色/明亮主题。
-- [ ] **文档完善**: 编写详细的使用说明 README.md 与发布文档。
-- [ ] **发布准备**: 准备 `custom_nodes` 市场提交。
+---
+*路线图将根据社区反馈和技术演进动态调整。*

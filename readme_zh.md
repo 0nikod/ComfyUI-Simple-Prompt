@@ -31,6 +31,9 @@
 ```bash
 git clone https://github.com/jtydhr88/comfyui_simple_prompt
 cd comfyui_simple_prompt
+# 安装 Python 依赖
+pip install -r requirements.txt
+# 编译前端
 npm install && npm run build
 ```
 

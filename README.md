@@ -31,6 +31,9 @@
 ```bash
 git clone https://github.com/jtydhr88/comfyui_simple_prompt
 cd comfyui_simple_prompt
+# Install Python dependencies
+pip install -r requirements.txt
+# Build frontend
 npm install && npm run build
 ```
 
