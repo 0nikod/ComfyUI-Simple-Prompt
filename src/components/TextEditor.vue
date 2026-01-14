@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, watch, nextTick, computed, onMounted, onUnmounted } from 'vue';
+import { useI18n } from 'vue-i18n';
 import { DuckDBService } from '../utils/duckdbService';
 import { settings } from '../utils/settings';
 import { getCaretCoordinates } from '../utils/caret';
@@ -18,6 +19,7 @@ const props = defineProps({
 });
 
 const emit = defineEmits(['update:modelValue', 'cursor-move']);
+const { t } = useI18n();
 
 const textareaRef = ref<HTMLTextAreaElement | null>(null);
 const containerRef = ref<HTMLElement | null>(null);
@@ -308,8 +310,8 @@ defineExpose({ focus });
   <div class="sp-editor-container" ref="containerRef">
     <!-- 1. Toolbar -->
     <div class="sp-toolbar">
-        <button class="sp-btn" @click="copyToClipboard" title="Copy to Clipboard">
-            <span class="icon">📋</span> Copy
+        <button class="sp-btn" @click="copyToClipboard" :title="t('editor.copyTitle')">
+            <span class="icon">📋</span> {{ t('editor.copy') }}
         </button>
         <!-- Add more buttons here as needed -->
     </div>
@@ -333,7 +335,7 @@ defineExpose({ focus });
             @input="handleInput"
             @keydown="handleKeydown"
             @blur="handleBlur"
-            placeholder="Enter positive prompt here..."
+            :placeholder="t('editor.placeholder')"
             spellcheck="false"
         ></textarea>
         

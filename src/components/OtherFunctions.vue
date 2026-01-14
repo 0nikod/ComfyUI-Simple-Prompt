@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { Icon } from '@iconify/vue';
+import { useI18n } from 'vue-i18n';
 
 const props = defineProps<{
   tagCount?: number;
@@ -8,6 +9,8 @@ const props = defineProps<{
 const emit = defineEmits<{
   'open-search': [];
 }>();
+
+const { t } = useI18n();
 
 const openSearch = () => {
   emit('open-search');
@@ -19,7 +22,7 @@ const openSearch = () => {
     <!-- Search Button -->
     <button class="toolbar-btn" @click="openSearch">
       <Icon icon="mdi:magnify" />
-      <span>搜索</span>
+      <span>{{ t('editor.searchBtn') }}</span>
     </button>
 
     <div class="separator"></div>
@@ -27,7 +30,7 @@ const openSearch = () => {
     <!-- Tag Count -->
     <div class="tag-count">
       <Icon icon="mdi:tag-multiple" />
-      <span>标签: {{ tagCount || 0 }}</span>
+      <span>{{ t('editor.tagCount') }}{{ tagCount || 0 }}</span>
     </div>
   </div>
 </template>

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue';
+import { useI18n } from 'vue-i18n';
 import { CATEGORY_COLORS, TagCategory } from '../utils/types';
 import { Icon } from '@iconify/vue';
 
@@ -12,6 +13,8 @@ const props = defineProps<{
 const emit = defineEmits<{
   select: [item: any];
 }>();
+
+const { t } = useI18n();
 
 const handleSelect = (item: any) => {
   emit('select', item);
@@ -32,11 +35,11 @@ const formatCount = (count: number | bigint) => {
 <template>
   <div class="autocomplete-list">
     <div v-if="loading" class="loading-item">
-      <Icon icon="mdi:loading" class="spin" /> Loading...
+      <Icon icon="mdi:loading" class="spin" /> {{ t('editor.loading') }}
     </div>
     
     <div v-else-if="items.length === 0" class="no-results">
-      No matching tags
+      {{ t('editor.noMatches') }}
     </div>
 
     <template v-else>

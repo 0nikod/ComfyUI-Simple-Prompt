@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { ref } from 'vue';
+import { ref, watch } from 'vue';
+import { useI18n } from 'vue-i18n';
 import { Icon } from '@iconify/vue';
 import { settings } from '../utils/settings';
 
@@ -11,10 +12,16 @@ const props = defineProps({
 });
 
 const emit = defineEmits(['close']);
+const { t, locale } = useI18n();
 
 const handleClose = () => {
   emit('close');
 };
+
+// Sync settings.language with i18n locale
+watch(() => settings.language, (newLang) => {
+  locale.value = newLang;
+});
 
 // Local reactive copies for the settings
 // These are directly bound to the reactive settings object
@@ -29,9 +36,9 @@ const handleClose = () => {
         <div class="settings-header">
           <div class="settings-title">
             <Icon icon="mdi:cog" class="settings-icon" />
-            <span>设置 / Settings</span>
+            <span>{{ t('settings.title') }}</span>
           </div>
-          <button class="btn-close" @click="handleClose" title="关闭 / Close">
+          <button class="btn-close" @click="handleClose" :title="t('common.close')">
             <Icon icon="mdi:close" />
           </button>
         </div>
@@ -42,13 +49,13 @@ const handleClose = () => {
           <div class="settings-section">
             <h3 class="section-title">
               <Icon icon="mdi:format-text" />
-              文本格式 / Text Formatting
+              {{ t('settings.sections.textFormat') }}
             </h3>
             
             <div class="setting-item">
               <div class="setting-info">
-                <label class="setting-label">下划线转空格 / Convert Underscore to Space</label>
-                <p class="setting-desc">自动将标签中的下划线 "_" 转换为空格 / Automatically convert underscores to spaces</p>
+                <label class="setting-label">{{ t('settings.items.convertUnderscore') }}</label>
+                <p class="setting-desc">{{ t('settings.items.convertUnderscoreDesc') }}</p>
               </div>
               <label class="switch">
                 <input type="checkbox" v-model="settings.convertUnderscoreToSpace">
@@ -58,8 +65,8 @@ const handleClose = () => {
 
             <div class="setting-item">
               <div class="setting-info">
-                <label class="setting-label">转义括号 / Escape Brackets</label>
-                <p class="setting-desc">将括号 "()" 转义为 "\(\)" / Escape parentheses as "\(\)"</p>
+                <label class="setting-label">{{ t('settings.items.escapeBrackets') }}</label>
+                <p class="setting-desc">{{ t('settings.items.escapeBracketsDesc') }}</p>
               </div>
               <label class="switch">
                 <input type="checkbox" v-model="settings.escapeBrackets">
@@ -72,13 +79,13 @@ const handleClose = () => {
           <div class="settings-section">
             <h3 class="section-title">
               <Icon icon="mdi:magnify" />
-              补全与搜索 / Autocomplete & Search
+              {{ t('settings.sections.autocomplete') }}
             </h3>
             
             <div class="setting-item">
               <div class="setting-info">
-                <label class="setting-label">在搜索中使用别名 / Use Aliases in Search</label>
-                <p class="setting-desc">搜索时匹配标签别名 / Match tag aliases when searching</p>
+                <label class="setting-label">{{ t('settings.items.useAliasSearch') }}</label>
+                <p class="setting-desc">{{ t('settings.items.useAliasSearchDesc') }}</p>
               </div>
               <label class="switch">
                 <input type="checkbox" v-model="settings.useAliasesInSearch">
@@ -88,8 +95,8 @@ const handleClose = () => {
 
             <div class="setting-item">
               <div class="setting-info">
-                <label class="setting-label">在自动补全中使用别名 / Use Aliases in Autocomplete</label>
-                <p class="setting-desc">自动补全时匹配别名（可能影响性能）/ Match aliases in autocomplete (may impact performance)</p>
+                <label class="setting-label">{{ t('settings.items.useAliasAutocomplete') }}</label>
+                <p class="setting-desc">{{ t('settings.items.useAliasAutocompleteDesc') }}</p>
               </div>
               <label class="switch">
                 <input type="checkbox" v-model="settings.useAliasesInAutocomplete">
@@ -102,13 +109,13 @@ const handleClose = () => {
           <div class="settings-section">
             <h3 class="section-title">
               <Icon icon="mdi:pencil" />
-              编辑行为 / Editing Behavior
+              {{ t('settings.sections.editing') }}
             </h3>
             
             <div class="setting-item">
               <div class="setting-info">
-                <label class="setting-label">智能退格 / Smart Backspace</label>
-                <p class="setting-desc">删除标签最后一个字符时，连同前面的逗号和空格一起删除 / When deleting the last character of a tag, also remove preceding comma and space</p>
+                <label class="setting-label">{{ t('settings.items.smartBackspace') }}</label>
+                <p class="setting-desc">{{ t('settings.items.smartBackspaceDesc') }}</p>
               </div>
               <label class="switch">
                 <input type="checkbox" v-model="settings.smartBackspace">
@@ -121,13 +128,13 @@ const handleClose = () => {
           <div class="settings-section">
             <h3 class="section-title">
               <Icon icon="mdi:translate" />
-              界面 / Interface
+              {{ t('settings.sections.interface') }}
             </h3>
             
             <div class="setting-item">
               <div class="setting-info">
-                <label class="setting-label">语言 / Language</label>
-                <p class="setting-desc">界面语言 / Interface language</p>
+                <label class="setting-label">{{ t('settings.items.language') }}</label>
+                <p class="setting-desc">{{ t('settings.items.languageDesc') }}</p>
               </div>
               <select v-model="settings.language" class="language-select">
                 <option value="en">English</option>
@@ -141,9 +148,9 @@ const handleClose = () => {
         <div class="settings-footer">
           <div class="footer-info">
             <Icon icon="mdi:information-outline" />
-            设置会自动保存 / Settings are saved automatically
+            {{ t('settings.autoSave') }}
           </div>
-          <button class="btn-primary" @click="handleClose">完成 / Done</button>
+          <button class="btn-primary" @click="handleClose">{{ t('common.done') }}</button>
         </div>
       </div>
     </div>

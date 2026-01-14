@@ -1,8 +1,71 @@
 {
+  "common": {
+    "cancel": "取消",
+    "save": "保存",
+    "close": "关闭",
+    "done": "完成",
+    "confirm": "确认"
+  },
+  "settings": {
+    "title": "设置",
+    "sections": {
+      "textFormat": "文本格式",
+      "autocomplete": "补全与搜索",
+      "editing": "编辑行为",
+      "interface": "界面"
+    },
+    "items": {
+      "convertUnderscore": "下划线转空格",
+      "convertUnderscoreDesc": "自动将标签中的下划线 \"_\" 转换为空格",
+      "escapeBrackets": "转义括号",
+      "escapeBracketsDesc": "将括号 \"()\" 转义为 \"\\(\\)\"",
+      "useAliasSearch": "在搜索中使用别名",
+      "useAliasSearchDesc": "搜索时匹配标签别名",
+      "useAliasAutocomplete": "在自动补全中使用别名",
+      "useAliasAutocompleteDesc": "自动补全时匹配别名（可能影响性能）",
+      "smartBackspace": "智能退格",
+      "smartBackspaceDesc": "删除标签最后一个字符时，连同前面的逗号和空格一起删除",
+      "language": "语言",
+      "languageDesc": "界面语言"
+    },
+    "autoSave": "设置会自动保存"
+  },
+  "search": {
+    "title": "标签搜索",
+    "placeholder": "搜索标签（支持别名）...",
+    "filterLabel": "分类筛选:",
+    "loading": "搜索中...",
+    "noResults": "未找到匹配的标签",
+    "hint": "输入至少2个字符开始搜索",
+    "categories": {
+      "general": "通用",
+      "artist": "画师",
+      "character": "角色",
+      "copyright": "版权",
+      "meta": "元数据",
+      "unknown": "未知"
+    },
+    "addBtnTitle": "添加到prompt"
+  },
+  "editor": {
+    "copy": "复制",
+    "copyTitle": "复制到剪贴板",
+    "placeholder": "在此处输入正向提示词...",
+    "subtitle": "Simple Prompt Editor",
+    "tagCount": "标签: ",
+    "autocompleteHint": "Ctrl+Space 触发自动补全",
+    "searchBtn": "搜索",
+    "loading": "加载中...",
+    "noMatches": "无匹配标签",
+    "decreaseWeight": "减小权重",
+    "increaseWeight": "增大权重",
+    "removeTag": "删除标签"
+  },
   "vue-basic": {
     "title": "Vue基础示例",
     "pen": "铅笔",
     "clear-canvas": "清除画布",
-    "brush-size": "笔刷大小"
+    "brush-size": "笔刷大小",
+    "pen-tooltip": "这是一支铅笔"
   }
 }

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted } from 'vue';
+import { useI18n } from 'vue-i18n';
 import { Icon } from '@iconify/vue';
 import SettingsModal from './SettingsModal.vue';
 
@@ -12,6 +13,8 @@ const props = defineProps({
     default: false
   }
 });
+
+const { t } = useI18n();
 
 // Settings modal state
 const showSettings = ref(false);
@@ -62,13 +65,13 @@ onUnmounted(() => {
         <div class="sp-modal-header">
           <div class="sp-modal-title">
             <Icon icon="mdi:pencil-box-outline" class="sp-icon" />
-            <span>Simple Prompt Editor</span>
+            <span>{{ t('editor.subtitle') }}</span>
           </div>
           <div class="sp-modal-actions">
-            <button class="sp-btn-icon" title="Settings" @click="openSettings">
+            <button class="sp-btn-icon" :title="t('settings.title')" @click="openSettings">
               <Icon icon="mdi:cog" />
             </button>
-            <button class="sp-btn-icon sp-btn-close" @click="handleClose" title="Close">
+            <button class="sp-btn-icon sp-btn-close" @click="handleClose" :title="t('common.close')">
               <Icon icon="mdi:close" />
             </button>
           </div>
@@ -83,11 +86,11 @@ onUnmounted(() => {
         <div class="sp-modal-footer">
             <div class="sp-footer-left">
                 <!-- Status bar or hints could go here -->
-                <span class="sp-hint">Ctrl+Space for autocomplete</span>
+                <span class="sp-hint">{{ t('editor.autocompleteHint') }}</span>
             </div>
             <div class="sp-footer-right">
-                <button class="sp-btn sp-btn-secondary" @click="handleClose">Cancel</button>
-                <button class="sp-btn sp-btn-primary" @click="handleSave">Save</button>
+                <button class="sp-btn sp-btn-secondary" @click="handleClose">{{ t('common.cancel') }}</button>
+                <button class="sp-btn sp-btn-primary" @click="handleSave">{{ t('common.save') }}</button>
             </div>
         </div>
       </div>

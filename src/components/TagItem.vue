@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, ref, nextTick } from 'vue';
+import { useI18n } from 'vue-i18n';
 import type { TagItem } from '../utils/types';
 import { CATEGORY_COLORS, TagCategory } from '../utils/types';
 import { Icon } from '@iconify/vue';
@@ -13,6 +14,8 @@ const emit = defineEmits<{
   'update:weight': [id: string, weight: number];
   'toggle:enabled': [id: string];
 }>();
+
+const { t } = useI18n();
 
 // Get category color
 const categoryColor = computed(() => {
@@ -88,11 +91,11 @@ const handleKeydown = (e: KeyboardEvent) => {
     
     <!-- Weight badge and controls -->
     <div v-if="showWeight && !isEditing" class="tag-weight">
-      <button class="weight-btn" @click="decreaseWeight" title="Decrease weight">
+      <button class="weight-btn" @click="decreaseWeight" :title="t('editor.decreaseWeight')">
         <Icon icon="mdi:minus" />
       </button>
       <span class="weight-value">{{ tag.weight.toFixed(1) }}</span>
-      <button class="weight-btn" @click="increaseWeight" title="Increase weight">
+      <button class="weight-btn" @click="increaseWeight" :title="t('editor.increaseWeight')">
         <Icon icon="mdi:plus" />
       </button>
     </div>
@@ -109,7 +112,7 @@ const handleKeydown = (e: KeyboardEvent) => {
     />
     
     <!-- Remove button -->
-    <button class="tag-remove" @click="handleRemove" title="Remove tag">
+    <button class="tag-remove" @click="handleRemove" :title="t('editor.removeTag')">
       <Icon icon="mdi:close" />
     </button>
   </div>

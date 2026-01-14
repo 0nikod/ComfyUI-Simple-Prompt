@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue';
+import { useI18n } from 'vue-i18n';
 import { Icon } from '@iconify/vue';
 import { DuckDBService } from '../utils/duckdbService';
 import { TagCategory, CATEGORY_COLORS } from '../utils/types';
@@ -8,25 +9,16 @@ const props = defineProps<{
   visible: boolean;
 }>();
 
-const emit = defineEmits<{
-  'close': [];
-  'add-tag': [tagName: string, category: number];
-}>();
-
-// Search state
-const searchQuery = ref('');
-const searchResults = ref<any[]>([]);
-const loading = ref(false);
-const selectedCategories = ref<number[]>([]);
+const { t } = useI18n();
 
 // Category options
-const categoryOptions = [
-  { value: TagCategory.GENERAL, label: '通用', color: CATEGORY_COLORS[TagCategory.GENERAL] },
-  { value: TagCategory.ARTIST, label: '画师', color: CATEGORY_COLORS[TagCategory.ARTIST] },
-  { value: TagCategory.CHARACTER, label: '角色', color: CATEGORY_COLORS[TagCategory.CHARACTER] },
-  { value: TagCategory.COPYRIGHT, label: '版权', color: CATEGORY_COLORS[TagCategory.COPYRIGHT] },
-  { value: TagCategory.META, label: '元数据', color: CATEGORY_COLORS[TagCategory.META] },
-];
+const categoryOptions = computed(() => [
+  { value: TagCategory.GENERAL, label: t('search.categories.general'), color: CATEGORY_COLORS[TagCategory.GENERAL] },
+  { value: TagCategory.ARTIST, label: t('search.categories.artist'), color: CATEGORY_COLORS[TagCategory.ARTIST] },
+  { value: TagCategory.CHARACTER, label: t('search.categories.character'), color: CATEGORY_COLORS[TagCategory.CHARACTER] },
+  { value: TagCategory.COPYRIGHT, label: t('search.categories.copyright'), color: CATEGORY_COLORS[TagCategory.COPYRIGHT] },
+  { value: TagCategory.META, label: t('search.categories.meta'), color: CATEGORY_COLORS[TagCategory.META] },
+]);
 
 // Toggle category filter
 const toggleCategory = (category: number) => {
@@ -101,8 +93,8 @@ watch(() => props.visible, (newVal) => {
 
 // Get category label
 const getCategoryLabel = (category: number) => {
-  const option = categoryOptions.find(opt => opt.value === category);
-  return option ? option.label : '未知';
+  const option = categoryOptions.value.find(opt => opt.value === category);
+  return option ? option.label : t('search.categories.unknown');
 };
 
 // Get category color
@@ -132,9 +124,9 @@ const highlightMatch = (text: string, query: string): string => {
         <div class="modal-header">
           <div class="modal-title">
             <Icon icon="mdi:database-search" class="title-icon" />
-            <span>标签搜索</span>
+            <span>{{ t('search.title') }}</span>
           </div>
-          <button class="close-btn" @click="close" title="关闭">
+          <button class="close-btn" @click="close" :title="t('common.close')">
             <Icon icon="mdi:close" />
           </button>
         </div>
@@ -146,7 +138,7 @@ const highlightMatch = (text: string, query: string): string => {
             <input
               v-model="searchQuery"
               type="text"
-              placeholder="搜索标签（支持别名）..."
+              :placeholder="t('search.placeholder')"
               class="search-input"
               @input="handleSearchInput"
               autofocus
@@ -155,7 +147,7 @@ const highlightMatch = (text: string, query: string): string => {
               v-if="searchQuery"
               class="clear-btn"
               @click="searchQuery = ''; searchResults = []"
-              title="清除"
+              title="Clear"
             >
               <Icon icon="mdi:close-circle" />
             </button>
@@ -163,7 +155,7 @@ const highlightMatch = (text: string, query: string): string => {
 
           <!-- Category Filters -->
           <div class="category-filters">
-            <span class="filter-label">分类筛选:</span>
+            <span class="filter-label">{{ t('search.filterLabel') }}</span>
             <button
               v-for="cat in categoryOptions"
               :key="cat.value"
@@ -182,12 +174,12 @@ const highlightMatch = (text: string, query: string): string => {
         <div class="results-section">
           <div v-if="loading" class="loading-state">
             <Icon icon="mdi:loading" class="spin" />
-            <span>搜索中...</span>
+            <span>{{ t('search.loading') }}</span>
           </div>
 
           <div v-else-if="searchResults.length === 0 && searchQuery.trim()" class="empty-state">
             <Icon icon="mdi:magnify-close" />
-            <p>未找到匹配的标签</p>
+            <p>{{ t('search.noResults') }}</p>
           </div>
 
           <div v-else-if="searchResults.length > 0" class="results-list">
@@ -217,7 +209,7 @@ const highlightMatch = (text: string, query: string): string => {
                   </span>
                 </div>
               </div>
-              <button class="add-btn" title="添加到prompt">
+              <button class="add-btn" :title="t('search.addBtnTitle')">
                 <Icon icon="mdi:plus" />
               </button>
             </div>
@@ -225,7 +217,7 @@ const highlightMatch = (text: string, query: string): string => {
 
           <div v-else class="hint-state">
             <Icon icon="mdi:information-outline" />
-            <p>输入至少2个字符开始搜索</p>
+            <p>{{ t('search.hint') }}</p>
           </div>
         </div>
       </div>

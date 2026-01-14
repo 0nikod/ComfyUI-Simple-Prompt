@@ -45,16 +45,28 @@ const saveChanges = () => {
     console.log("Saved prompt:", promptText.value);
     closeModal();
 };
+
+const { locale } = DuckDBService.getInstance() as any; // Mock logic or use i18n
+import { useI18n } from 'vue-i18n';
+const { locale: i18nLocale } = useI18n();
+
+const toggleLanguage = () => {
+    i18nLocale.value = i18nLocale.value === 'en' ? 'zh-CN' : 'en';
+};
 </script>
 
 <template>
-  <div style="text-align: center;">
+  <div style="text-align: center; padding-top: 50px;">
     <h1>Simple Prompt Dev Environment</h1>
     <p>DB Status: <strong>{{ dbStatus }}</strong></p>
-    <p>Click below to test the Modal</p>
-    <button @click="openModal" style="padding: 10px 20px; font-size: 16px; cursor: pointer;">
-        Edit Prompt
-    </button>
+    <div style="margin-bottom: 20px;">
+        <button @click="openModal" style="padding: 10px 20px; font-size: 16px; cursor: pointer; margin-right: 10px;">
+            Edit Prompt
+        </button>
+        <button @click="toggleLanguage" style="padding: 10px 20px; font-size: 16px; cursor: pointer;">
+            Switch Language ({{ i18nLocale }})
+        </button>
+    </div>
 
     <ModalWrapper 
         :visible="showModal" 

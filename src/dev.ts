@@ -6,6 +6,7 @@
  */
 
 import { createApp, h } from 'vue';
+import i18n from './i18n';
 import AppDev from './App.dev.vue';
 // import SimplePromptEditor from './components/SimplePromptEditor.vue';
 
@@ -70,6 +71,7 @@ async function initDev() {
     if (appContainer) {
         // appContainer.innerHTML = '<h2>Check console. Click "Edit Prompt" button (top-left) to simulate.</h2>';
         const app = createApp(AppDev);
+        app.use(i18n);
         app.mount('#app');
     }
 

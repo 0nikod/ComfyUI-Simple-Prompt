@@ -1,9 +1,71 @@
 {
+  "common": {
+    "cancel": "Cancel",
+    "save": "Save",
+    "close": "Close",
+    "done": "Done",
+    "confirm": "Confirm"
+  },
+  "settings": {
+    "title": "Settings",
+    "sections": {
+      "textFormat": "Text Formatting",
+      "autocomplete": "Autocomplete & Search",
+      "editing": "Editing Behavior",
+      "interface": "Interface"
+    },
+    "items": {
+      "convertUnderscore": "Convert Underscore to Space",
+      "convertUnderscoreDesc": "Automatically convert underscores to spaces",
+      "escapeBrackets": "Escape Brackets",
+      "escapeBracketsDesc": "Escape parentheses as \\(\\)",
+      "useAliasSearch": "Use Aliases in Search",
+      "useAliasSearchDesc": "Match tag aliases when searching",
+      "useAliasAutocomplete": "Use Aliases in Autocomplete",
+      "useAliasAutocompleteDesc": "Match aliases in autocomplete (may impact performance)",
+      "smartBackspace": "Smart Backspace",
+      "smartBackspaceDesc": "When deleting the last character of a tag, also remove preceding comma and space",
+      "language": "Language",
+      "languageDesc": "Interface language"
+    },
+    "autoSave": "Settings are saved automatically"
+  },
+  "search": {
+    "title": "Tag Search",
+    "placeholder": "Search tags (aliases supported)...",
+    "filterLabel": "Category Filters:",
+    "loading": "Searching...",
+    "noResults": "No matching tags found",
+    "hint": "Enter at least 2 characters to search",
+    "categories": {
+      "general": "General",
+      "artist": "Artist",
+      "character": "Character",
+      "copyright": "Copyright",
+      "meta": "Meta",
+      "unknown": "Unknown"
+    },
+    "addBtnTitle": "Add to prompt"
+  },
+  "editor": {
+    "copy": "Copy",
+    "copyTitle": "Copy to Clipboard",
+    "placeholder": "Enter positive prompt here...",
+    "subtitle": "Simple Prompt Editor",
+    "tagCount": "Tags: ",
+    "autocompleteHint": "Ctrl+Space for autocomplete",
+    "searchBtn": "Search",
+    "loading": "Loading...",
+    "noMatches": "No matching tags",
+    "decreaseWeight": "Decrease weight",
+    "increaseWeight": "Increase weight",
+    "removeTag": "Remove tag"
+  },
   "vue-basic": {
     "title": "Vue Basic Example",
     "pen": "Pen",
     "clear-canvas": "Clear Canvas",
     "brush-size": "Brush Size",
-    "pen-tooltip": "this is a pen"
+    "pen-tooltip": "This is a pen"
   }
 }
