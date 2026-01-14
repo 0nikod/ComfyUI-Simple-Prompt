@@ -1,10 +1,17 @@
 <script setup lang="ts">
-import { ref } from 'vue';
+import { ref, watch } from 'vue';
 import ModalWrapper from './components/ModalWrapper.vue';
 import TextEditor from './components/TextEditor.vue';
+import VisualTagArea from './components/VisualTagArea.vue';
+import { textToTags, tagsToText } from './utils/promptParser';
+import type { TagItem } from './utils/types';
 
 const showModal = ref(false);
-const promptText = ref('1girl, solo, masterpiece, best quality');
+const promptText = ref('1girl, solo, (masterpiece:1.2), best quality');
+const tags = ref<TagItem[]>([]);
+
+// Initialize tags from promptText
+tags.value = textToTags(promptText.value);
 
 const openModal = () => {
     showModal.value = true;
@@ -15,9 +22,22 @@ const closeModal = () => {
 };
 
 const saveChanges = () => {
-    console.log("Save requested");
+    console.log("Saved prompt:", promptText.value);
     closeModal();
 };
+
+// Watch promptText changes -> update tags
+watch(promptText, (newText) => {
+    tags.value = textToTags(newText);
+});
+
+// Watch tags changes -> update promptText
+watch(tags, (newTags) => {
+    const newText = tagsToText(newTags);
+    if (newText !== promptText.value) {
+        promptText.value = newText;
+    }
+}, { deep: true });
 </script>
 
 <template>
@@ -40,10 +60,9 @@ const saveChanges = () => {
                     <TextEditor v-model="promptText" />
                 </div>
                 
-                <!-- Right Pane: Placeholder for Visual Tags -->
-                <div style="flex: 1; padding: 20px; color: #888;">
-                    <h3>Visual Tag Area (Coming Soon)</h3>
-                    <p>Current Prompt: {{ promptText }}</p>
+                <!-- Right Pane: Visual Tag Area -->
+                <div style="flex: 1; min-width: 300px;">
+                    <VisualTagArea :tags="tags" @update:tags="tags = $event" />
                 </div>
             </div>
         </template>
