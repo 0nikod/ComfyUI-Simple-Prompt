@@ -21,18 +21,35 @@ export function textToTags(text: string): TagItem[] {
         const char = text[i];
 
         // Handle escape sequences
+        // matches \ followed by anything.
+        // We usually only care about \( and \) but let's be safe.
+        // If we see \, check next char.
         if (char === '\\' && i + 1 < text.length) {
             const nextChar = text[i + 1];
             if (nextChar === '(' || nextChar === ')') {
-                // Escaped parenthesis - treat as literal character
+                // It is an escaped parenthesis.
+                // We want to treat it as part of the tag name (literal).
+                // "star \(sky\)" -> tag text: "star (sky)"
                 currentTag += nextChar;
-                i += 2; // Skip both \ and the parenthesis
+                i += 2;
+                continue;
+            } else {
+                // Backslash followed by other char (e.g. \n or just \a)
+                // Treat backslash as literal? Or ignore? 
+                // Mostly safe to treat as literal if not special.
+                // But for safety let's just add the char and skip backslash?
+                // Or add both? "C:\\path" -> "C:\path"
+                // Let's stick to strict behavior: Only escape parens.
+                // If not parens, treat \ as literal char.
+                currentTag += char;
+                i++;
                 continue;
             }
         }
 
         // Handle weighted tags: (text:weight)
         if (char === '(' && !inWeight) {
+            // ... (rest is same)
             // Start of weighted tag
             // Save any accumulated plain text first
             if (currentTag.trim()) {
@@ -92,8 +109,8 @@ export function textToTags(text: string): TagItem[] {
             }
         }
 
-        // Handle comma separator
-        if (char === ',') {
+        // Handle comma or newline separator
+        if (char === ',' || char === '\n') {
             if (currentTag.trim()) {
                 tags.push({
                     id: `tag-${idx++}`,
@@ -131,13 +148,20 @@ export function textToTags(text: string): TagItem[] {
  * Convert TagItem array back to prompt text
  */
 export function tagsToText(tags: TagItem[]): string {
-    return tags
-        .filter(tag => tag.enabled)
+    const enabledTags = tags.filter(tag => tag.enabled);
+    if (enabledTags.length === 0) return '';
+
+    return enabledTags
         .map(tag => {
+            // Escape parens in the text itself to avoid parser confusion
+            const escapedText = tag.text.replace(/\(/g, '\\(').replace(/\)/g, '\\)');
+
             if (tag.weight !== 1.0) {
-                return `(${tag.text}:${tag.weight.toFixed(1)})`;
+                // If it has weight, we wrap it. Inner text is already escaped.
+                // e.g. star \(sky\) -> (star \(sky\):1.2)
+                return `(${escapedText}:${tag.weight.toFixed(1)})`;
             }
-            return tag.text;
+            return escapedText;
         })
-        .join(', ');
+        .join(', ') + ',';
 }

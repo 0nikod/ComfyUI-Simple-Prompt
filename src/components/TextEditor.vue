@@ -132,15 +132,6 @@ const handleInput = (e: Event) => {
     checkAutocomplete(target);
 };
 
-// Handle updates from VisualTagArea
-const handleTagsUpdate = (newTags: TagItem[]) => {
-    tags.value = newTags;
-    const newText = tagsToText(newTags);
-    if (newText !== localValue.value) {
-        localValue.value = newText;
-        emit('update:modelValue', newText);
-    }
-};
 
 // Copy functionality
 const copyToClipboard = async () => {
@@ -402,45 +393,145 @@ const handleFormat = () => {
 };
 
 // Organize
-const handleOrganize = () => {
+
+const getSortOrder = (cat: number) => {
+    // Row 0: Special(6)
+    // Row 1: Character(4), Copyright(2,3)
+    // Row 2: Artist(1)
+    // Row 3: General(0)
+    // Row 4: Meta(5), Rating(7)
+    const rowMap: Record<number, number> = {
+        6: 0,
+        4: 1, 2: 1, 3: 1,
+        1: 2,
+        0: 3,
+        5: 4, 7: 4
+    };
+    return rowMap[cat] !== undefined ? rowMap[cat] : 3; // Default to General
+};
+
+const formatGroupedTags = (tagsList: TagItem[]) => {
+    if (tagsList.length === 0) return '';
+    
+    // Group by row
+    const rows: Record<number, TagItem[]> = { 0: [], 1: [], 2: [], 3: [], 4: [] };
+    tagsList.forEach(tag => {
+        const cat = tag.category !== undefined ? tag.category : 0;
+        const rowIndex = getSortOrder(cat);
+        rows[rowIndex].push(tag);
+    });
+    
+    // Sort logic for Row 1 (Characters & Copyrights)
+    // Preference: Character(4) > Copyright(3) > Copyright(2)
+    // Using stable sort by category ID (descending)
+    rows[1].sort((a, b) => {
+        const catA = a.category !== undefined ? a.category : 0;
+        const catB = b.category !== undefined ? b.category : 0;
+        // Descending order: 4 (Character) > 3 (Copyright) > 2 (Copyright)
+        return catB - catA;
+    });
+    
+    // Convert rows to text
+    const rowTexts = [0, 1, 2, 3, 4].map(idx => {
+        const rowTags = rows[idx];
+        if (rowTags.length === 0) return '';
+        return tagsToText(rowTags);
+    });
+    
+    // Build final output with specific blank line logic
+    // Users request:
+    // Row 0
+    // Row 1
+    // Row 2
+    // (blank if General exists)
+    // Row 3 (General)
+    // (blank if Meta/Rating exists)
+    // Row 4
+    
+    let result = '';
+    // Rows 0, 1, 2
+    const topPart = rowTexts.slice(0, 3).filter(t => t).join('\n');
+    if (topPart) result += topPart;
+    
+    // Gap before General
+    if (result && rowTexts[3]) result += '\n\n';
+    
+    if (rowTexts[3]) result += rowTexts[3];
+    
+    // Gap after General
+    if (result && rowTexts[4]) result += '\n\n';
+    
+    if (rowTexts[4]) result += rowTexts[4];
+    
+    return result;
+};
+
+// Handle updates from VisualTagArea
+const handleTagsUpdate = (newTags: TagItem[]) => {
+    tags.value = newTags;
+    // If multiline is already present or we want to maintain the organized structure
+    // we use grouped formatting if at least one tag has a category.
+    const hasCategory = newTags.some(t => t.category !== undefined && t.category !== 0);
+    const newText = hasCategory ? formatGroupedTags(newTags) : tagsToText(newTags);
+    
+    if (newText !== localValue.value) {
+        localValue.value = newText;
+        emit('update:modelValue', newText);
+    }
+};
+
+// Organize
+const handleOrganize = async () => {
     const rawTags = textToTags(localValue.value);
     const enriched = enrichTags(rawTags);
     
-    // Priority: Special(6) > Character(4) > Copyright(3) > Artist(1) > General(0) > Meta(5) > Rating(7)
-    // Note: Lower Value = Higher Priority in Array sort?
-    // Wait, requirement order: Special, Characters, Copyrights, Artist, General, Meta, Rating.
-    // Map categories to sort index
-    const sortOrder: Record<number, number> = {
-        6: 0, // Special (Gold)
-        4: 1, // Character (data says 4)
-        3: 2, // Copyright (3)
-        1: 3, // Artist (1)
-        0: 4, // General (0)
-        5: 5, // Meta (5)
-        7: 6  // Rating (HotPink)
-    };
-    
-    // Custom tags (IDs > 7) should probably come after General? Or after Artist?
-    // Default fallback is General (4).
-    // Let's treat unknown as General.
-    
-    enriched.sort((a, b) => {
-        const catA = a.category !== undefined ? a.category : 0;
-        const catB = b.category !== undefined ? b.category : 0;
+    // Wait for category fetch to complete if needed
+    if (fetchQueue.size > 0) {
+        // Clear existing timeout and fetch immediately
+        if (fetchTimeout) clearTimeout(fetchTimeout);
+        const names = Array.from(fetchQueue);
+        fetchQueue.clear();
         
-        const orderA = sortOrder[catA] !== undefined ? sortOrder[catA] : 4; // Default to General pos
-        const orderB = sortOrder[catB] !== undefined ? sortOrder[catB] : 4;
-        
-        if (orderA !== orderB) {
-            return orderA - orderB;
+        try {
+            const db = DuckDBService.getInstance();
+            const results = await db.getTagsDetails(names);
+            
+            // Update cache
+            Object.entries(results).forEach(([name, cat]) => {
+                categoryCache.value[name.toLowerCase()] = cat;
+            });
+            
+            // Mark not found tags as General
+            names.forEach(name => {
+                const lower = name.toLowerCase();
+                if (categoryCache.value[lower] === undefined) {
+                    categoryCache.value[lower] = 0;
+                }
+            });
+            
+            // Re-enrich with updated cache
+            enriched.forEach(tag => {
+                const lower = tag.text.toLowerCase();
+                if (categoryCache.value[lower] !== undefined) {
+                    tag.category = categoryCache.value[lower];
+                }
+            });
+        } catch (e) {
+            console.error("Error fetching tag categories during organize:", e);
         }
-        return 0; // Keep original relative order if same cat
-    });
+    }
     
-    const newText = tagsToText(enriched);
-    localValue.value = newText;
-    emit('update:modelValue', newText);
-    tags.value = enriched;
+    const newText = formatGroupedTags(enriched);
+    
+    if (newText !== localValue.value) {
+        localValue.value = newText;
+        emit('update:modelValue', newText);
+        // Important: Update the tags ref with proper categories to keep visual synced
+        tags.value = textToTags(newText).map(t => {
+             const match = enriched.find(e => e.text === t.text);
+             return match ? { ...t, category: match.category } : t;
+        });
+    }
 };
 
 // Insert Meta (at cursor)

@@ -203,6 +203,10 @@ def get_tags_details(conn, names: List[str], fast: bool = False) -> Dict[str, in
     """
     Get category for a list of tag names.
     Returns a dict {name: category}
+
+    Handles both space and underscore formats:
+    - Input "blue hair" will match database "blue_hair"
+    - Input "blue_hair" will also work
     """
     if not conn or not names:
         return {}
@@ -214,16 +218,27 @@ def get_tags_details(conn, names: List[str], fast: bool = False) -> Dict[str, in
     if not clean_names:
         return {}
 
-    # We need to handle case-insensitive matching
-    # DuckDB ILIKE IN (...) is one way, or joining with a values list
-    # VALUES list is better for bulk
+    # Create a mapping of normalized names (underscore) to original names
+    # This allows us to return results mapped to the original input format
+    normalized_to_original: Dict[str, str] = {}
+    all_variants = set()
 
-    # Build placeholders
-    placeholders = ",".join(["?"] * len(clean_names))
+    for name in clean_names:
+        lower_name = name.lower()
+        # Add both space and underscore variants
+        space_variant = lower_name.replace("_", " ")
+        underscore_variant = lower_name.replace(" ", "_")
 
-    # We want to match names and return their category.
-    # Since we have duplicates in views potentially (though 'tags' view handles it),
-    # we just query 'tags' view.
+        all_variants.add(space_variant)
+        all_variants.add(underscore_variant)
+
+        # Map both variants to the original name
+        normalized_to_original[space_variant] = lower_name
+        normalized_to_original[underscore_variant] = lower_name
+
+    variant_list = list(all_variants)
+    placeholders = ",".join(["?"] * len(variant_list))
+
     sql = f"""
         SELECT name, category 
         FROM {table_name}
@@ -231,22 +246,26 @@ def get_tags_details(conn, names: List[str], fast: bool = False) -> Dict[str, in
     """
 
     try:
-        # execute accepts list of params
-        res = conn.execute(sql, clean_names).fetchall()
-
-        # Build map.
-        # Note: The DB name might differ in casing from input name.
-        # But we want to map generic input to category.
-        # Ideally we map the *lowercase* version of the input to the category,
-        # so the frontend can look it up easily.
+        res = conn.execute(sql, variant_list).fetchall()
 
         result_map = {}
         for row in res:
-            db_name = row[0]
+            db_name = row[0].lower()
             category = row[1]
-            # We map the lowercase name from DB to category
-            # Frontend should normalise lookups
-            result_map[db_name.lower()] = category
+
+            # Map back to all original input names that could match this
+            original_name = normalized_to_original.get(db_name)
+            if original_name:
+                result_map[original_name] = category
+
+            # Also add the db name itself for direct lookups
+            result_map[db_name] = category
+
+            # Add the other variant too (space <-> underscore)
+            space_variant = db_name.replace("_", " ")
+            underscore_variant = db_name.replace(" ", "_")
+            result_map[space_variant] = category
+            result_map[underscore_variant] = category
 
         return result_map
     except Exception as e:
