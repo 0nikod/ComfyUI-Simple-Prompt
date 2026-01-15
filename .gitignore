@@ -115,7 +115,9 @@ node.zip
 .GEMINI.md
 
 # duckdb
+!data/default*
 data/*
+
 
 uv.lock
 
