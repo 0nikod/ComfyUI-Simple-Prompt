@@ -10,6 +10,7 @@ import OtherFunctions from './OtherFunctions.vue';
 import TagSearchModal from './TagSearchModal.vue';
 import { textToTags, tagsToText } from '../utils/promptParser';
 import type { TagItem } from '../utils/types';
+import { metaService } from '../utils/metaService';
 
 const props = defineProps({
   modelValue: {
@@ -381,6 +382,159 @@ const focus = () => {
     textareaRef.value?.focus();
 };
 
+// --- Footer Handlers ---
+
+// Format: ,xxx -> , xxx
+const handleFormat = () => {
+    let newVal = localValue.value;
+    // Replace comma followed immediately by non-space with comma space
+    // Also trim multiple spaces
+    newVal = newVal.replace(/,(\S)/g, ', $1');
+    // Maybe normalize spaces around commas?
+    // newVal = newVal.replace(/\s*,\s*/g, ', '); 
+    // Stick to explicit request: ",xxx" -> ", xxx"
+    
+    if (newVal !== localValue.value) {
+        localValue.value = newVal;
+        emit('update:modelValue', newVal);
+        tags.value = enrichTags(textToTags(newVal));
+    }
+};
+
+// Organize
+const handleOrganize = () => {
+    const rawTags = textToTags(localValue.value);
+    const enriched = enrichTags(rawTags);
+    
+    // Priority: Special(6) > Character(4) > Copyright(3) > Artist(1) > General(0) > Meta(5) > Rating(7)
+    // Note: Lower Value = Higher Priority in Array sort?
+    // Wait, requirement order: Special, Characters, Copyrights, Artist, General, Meta, Rating.
+    // Map categories to sort index
+    const sortOrder: Record<number, number> = {
+        6: 0, // Special (Gold)
+        4: 1, // Character (data says 4)
+        3: 2, // Copyright (3)
+        1: 3, // Artist (1)
+        0: 4, // General (0)
+        5: 5, // Meta (5)
+        7: 6  // Rating (HotPink)
+    };
+    
+    // Custom tags (IDs > 7) should probably come after General? Or after Artist?
+    // Default fallback is General (4).
+    // Let's treat unknown as General.
+    
+    enriched.sort((a, b) => {
+        const catA = a.category !== undefined ? a.category : 0;
+        const catB = b.category !== undefined ? b.category : 0;
+        
+        const orderA = sortOrder[catA] !== undefined ? sortOrder[catA] : 4; // Default to General pos
+        const orderB = sortOrder[catB] !== undefined ? sortOrder[catB] : 4;
+        
+        if (orderA !== orderB) {
+            return orderA - orderB;
+        }
+        return 0; // Keep original relative order if same cat
+    });
+    
+    const newText = tagsToText(enriched);
+    localValue.value = newText;
+    emit('update:modelValue', newText);
+    tags.value = enriched;
+};
+
+// Insert Meta (at cursor)
+const handleInsertMeta = (metaWord: string) => {
+    const el = textareaRef.value;
+    if (!el) return;
+    
+    const start = el.selectionStart;
+    const end = el.selectionEnd;
+    const text = localValue.value;
+    
+    // Add comma if needed
+    let insertText = metaWord;
+    const charBefore = text.substring(start - 1, start);
+    if (charBefore && charBefore.trim() && charBefore !== ',') {
+        insertText = ', ' + insertText;
+    } else if (charBefore === ',') {
+        insertText = ' ' + insertText;
+    }
+    
+    // Add comma after if needed?
+    // Let's just insert.
+    
+    const newText = text.substring(0, start) + insertText + text.substring(end);
+    localValue.value = newText;
+    emit('update:modelValue', newText);
+    tags.value = enrichTags(textToTags(newText));
+    
+    nextTick(() => {
+        el.focus();
+        el.setSelectionRange(start + insertText.length, start + insertText.length);
+    });
+};
+
+// Toggle Auto Meta (Sync with settings)
+const handleAutoMetaToggle = (val: boolean) => {
+    settings.autoMetaEnabled = val;
+};
+
+// Check Auto Meta on Save?
+// Actually, user said: "open time click save automatically add meta word"
+// This implies the PARENT calls save, and we should intercept it?
+// Or we just update the modelValue before emit('update:modelValue')?
+// The parent `App.vue` listens to `save` event from `ModalWrapper`.
+// `ModalWrapper` emits `save` when "Done" or "Save" is clicked.
+// `TextEditor` is inside `ModalWrapper`.
+// `TextEditor` syncs `v-model` (localValue) with Parent's `promptText`.
+// When `App.vue` calls `saveChanges`, it uses `promptText`.
+// So we need to apply Auto Meta to `promptText` whenever it changes? No, too aggressive.
+// "Click save automatically in end add meta word".
+// So when the user clicks "Save" / "Use" in the UI.
+// The UI buttons are in `ModalWrapper`?
+// `App.vue`:
+//   <ModalWrapper @save="saveChanges"> ... </ModalWrapper>
+//   const saveChanges = () => { emit('save', promptText.value); ... }
+// `ModalWrapper` has the buttons.
+// `TextEditor` doesn't control the Save button.
+//
+// Solution:
+// Watch `localValue`? No.
+// Hook into `onUnmounted`? No.
+// Since `TextEditor` updates `modelValue` in real-time (`@input`), parent always has latest text.
+// We need to intercept the Final Save.
+// BUT `TextEditor` doesn't know when Save happens.
+//
+// Maybe `TextEditor` should apply auto-meta continuously? No.
+// Maybe we can export a function `applyAutoMeta()` and `App.vue` calls it?
+// `App.vue` has a ref to `TextEditor`? Content is in slot.
+//
+// Alternative: `TextEditor` applies auto-meta whenever `localValue` changes IF enabled? No, "Click save".
+//
+// Maybe "Auto Meta" switch is just for *insertion*?
+// "Switch, open time click save automatically in end add".
+// This strongly implies "On Save".
+//
+// I can add a watcher on `settings.autoMetaEnabled`? No.
+//
+// I will assume `ModalWrapper` or `App.vue` needs modification?
+// Or `TextEditor` emits a special event or `App.vue` logic needs update.
+// `App.vue`:
+// <TextEditor v-model="promptText" />
+//
+// I can update `App.vue` to check `settings.autoMetaEnabled`.
+// And fetch `metaService.metaTags`.
+// And append them.
+//
+// So `TextEditor` manages the SWITCH (via `OtherFunctions` -> `settings`).
+// `App.vue` performs the logic on Save.
+// This separates concerns nicely.
+//
+// So `TextEditor` does NOT need `handleAutoMetaOnSave` logic.
+// It just updates the setting.
+// New tasks: Update `App.vue` to handle Auto Meta on save.
+
 defineExpose({ focus });
 </script>
 
@@ -448,7 +602,12 @@ defineExpose({ focus });
     <div class="sp-footer">
         <OtherFunctions 
           :tag-count="tags.length"
+          :auto-meta="settings.autoMetaEnabled"
           @open-search="openSearchModal"
+          @format="handleFormat"
+          @organize="handleOrganize"
+          @update:auto-meta="handleAutoMetaToggle"
+          @insert-meta="handleInsertMeta"
         />
     </div>
 

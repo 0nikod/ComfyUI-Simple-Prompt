@@ -31,6 +31,12 @@ DEFAULT_TAGS_PATH = os.path.join(DATA_DIR, "default_tags.parquet")  # Priority 3
 USER_TAGS_PATH = os.path.join(CUSTOM_DATA_DIR, "user_tags.parquet")  # Priority 2
 LIKED_TAGS_PATH = os.path.join(CUSTOM_DATA_DIR, "liked_tags.parquet")  # Priority 1
 
+# Category & Meta Data Paths
+DEFAULT_CATEGORY_PATH = os.path.join(DATA_DIR, "default_category.json")
+CUSTOM_CATEGORY_PATH = os.path.join(CUSTOM_DATA_DIR, "custom_category.json")
+DEFAULT_PRESETS_PATH = os.path.join(DATA_DIR, "default_presets.json")
+CUSTOM_PRESETS_PATH = os.path.join(CUSTOM_DATA_DIR, "custom_presets.json")
+
 # Ensure custom directory exists
 os.makedirs(CUSTOM_DATA_DIR, exist_ok=True)
 
@@ -434,7 +440,7 @@ async def get_tags_details_api(request):
 @PromptServer.instance.routes.post("/simple-prompt/add-custom-tag")
 async def add_custom_tag_api(request):
     """
-    Add or Edit a tag in user_tags.parquet (or default_tags.parquet)
+    Add or Edit one or multiple tags in user_tags.parquet (or default_tags.parquet)
     """
     conn = get_db_connection()
     if not conn:
@@ -442,37 +448,52 @@ async def add_custom_tag_api(request):
 
     try:
         data = await request.json()
-        name = data.get("name")
-        category = int(data.get("category", 0))
-        post_count = int(data.get("post_count", 0))
-        alias = data.get("alias", [])
 
-        source = data.get("source", "user")  # default to user
+        # Detect Batch or Single
+        tags_to_process = []
+        if "tags" in data and isinstance(data["tags"], list):
+            tags_to_process = data["tags"]
+        else:
+            # Single
+            tags_to_process = [data]
 
-        if not name:
-            return web.json_response({"error": "Name is required"}, status=400)
+        if not tags_to_process:
+            return web.json_response({"error": "No tag data provided"}, status=400)
 
+        # Validate source from first item (assuming all same source for batch)
+        source = tags_to_process[0].get("source", "user")
         target_path = get_source_path_by_name(source)
+
         if not target_path:
             return web.json_response({"error": "Invalid source"}, status=400)
 
         # Ensure file exists
         ensure_parquet_exists(target_path, TAGS_SCHEMA)
 
-        # Load current Tags into a specific table
-        # We use a transaction-like approach: Read -> Insert/Update -> Write Back
-
+        # Transaction-like update
         target_path_sql = target_path.replace("\\", "/")
 
         # 1. Create temp table from existing parquet
         conn.execute("DROP TABLE IF EXISTS temp_edit_tags")
         conn.execute(f"CREATE TABLE temp_edit_tags AS SELECT * FROM read_parquet('{target_path_sql}')")
 
-        # 2. Delete existing if any (overwrite logic)
-        conn.execute("DELETE FROM temp_edit_tags WHERE name = ?", [name])
+        count_added = 0
 
-        # 3. Insert new tag
-        conn.execute("INSERT INTO temp_edit_tags VALUES (?, ?, ?, ?)", [name, category, post_count, alias])
+        for item in tags_to_process:
+            name = item.get("name")
+            if not name:
+                continue
+
+            category = int(item.get("category", 0))
+            post_count = int(item.get("post_count", 0))
+            alias = item.get("alias", [])
+
+            # 2. Delete existing if any (overwrite logic)
+            conn.execute("DELETE FROM temp_edit_tags WHERE name = ?", [name])
+
+            # 3. Insert new tag
+            conn.execute("INSERT INTO temp_edit_tags VALUES (?, ?, ?, ?)", [name, category, post_count, alias])
+            count_added += 1
 
         # 4. Write back to parquet
         conn.execute(f"COPY temp_edit_tags TO '{target_path_sql}' (FORMAT PARQUET)")
@@ -481,7 +502,7 @@ async def add_custom_tag_api(request):
         # 5. Refresh Main View
         init_duckdb()
 
-        return web.json_response({"status": "success", "message": f"Tag '{name}' added."})
+        return web.json_response({"status": "success", "message": f"{count_added} tag(s) added/updated."})
 
     except Exception as e:
         logger.error(f"Add custom tag failed: {e}")
@@ -813,6 +834,125 @@ async def update_tags_api(request):
 
     except Exception as e:
         logger.error(f"Update tags error: {e}")
+        return web.json_response({"error": str(e)}, status=500)
+
+
+# --------------------------------------------------------------------------------
+# JSON Management Helpers
+# --------------------------------------------------------------------------------
+
+
+def load_json(path: str, default: Any = None) -> Any:
+    if not os.path.exists(path):
+        return default
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except Exception as e:
+        logger.error(f"Failed to load JSON {path}: {e}")
+        return default
+
+
+def save_json(path: str, data: Any):
+    try:
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(data, f, indent=4, ensure_ascii=False)
+    except Exception as e:
+        logger.error(f"Failed to save JSON {path}: {e}")
+        raise e
+
+
+# --------------------------------------------------------------------------------
+# Category & Meta API
+# --------------------------------------------------------------------------------
+
+
+@PromptServer.instance.routes.get("/simple-prompt/categories/list")
+async def list_categories_api(request):
+    """
+    Returns merged categories (Default + Custom)
+    """
+    defaults = load_json(DEFAULT_CATEGORY_PATH, [])
+    customs = load_json(CUSTOM_CATEGORY_PATH, [])
+
+    # If default is empty (first run?), create it based on hardcoded defaults
+    if not defaults:
+        defaults = [
+            {"id": 0, "name": "General", "color": "#0075db"},
+            {"id": 1, "name": "Artist", "color": "#c00004"},
+            {"id": 3, "name": "Copyright", "color": "#c000c0"},
+            {"id": 4, "name": "Character", "color": "#00aa00"},
+            {"id": 5, "name": "Meta", "color": "#fd9200"},
+            {"id": 6, "name": "Special", "color": "#ffd700"},  # Gold
+            {"id": 7, "name": "Rating", "color": "#ff69b4"},  # HotPink
+        ]
+        # Save it so user can see it
+        try:
+            save_json(DEFAULT_CATEGORY_PATH, defaults)
+        except:
+            pass
+
+    # Merge: Custom overrides Default if same ID? Or just append?
+    # Usually we just append. But let's check for ID collisions just in case.
+    # Map by ID
+    cat_map = {c["id"]: c for c in defaults}
+    for c in customs:
+        # Ensure we don't accidentally overwrite if ID conflicts, unless intended.
+        # But if user created it, maybe they want to overwrite?
+        # Let's trust the ID uniqueness is handled by creator.
+        cat_map[c["id"]] = c
+
+    # Return as list, sorted by ID
+    result = sorted(cat_map.values(), key=lambda x: x["id"])
+    return web.json_response(result)
+
+
+@PromptServer.instance.routes.post("/simple-prompt/categories/save")
+async def save_categories_api(request):
+    """
+    Saves Custom Categories.
+    Expects a list of categories to be saved as 'custom'.
+    """
+    try:
+        data = await request.json()
+        categories = data.get("categories", [])
+        save_json(CUSTOM_CATEGORY_PATH, categories)
+        return web.json_response({"status": "success"})
+    except Exception as e:
+        return web.json_response({"error": str(e)}, status=500)
+
+
+@PromptServer.instance.routes.get("/simple-prompt/presets/list")
+async def list_presets_api(request):
+    """
+    Returns merged Meta Presets
+    """
+    defaults = load_json(DEFAULT_PRESETS_PATH, [])
+    customs = load_json(CUSTOM_PRESETS_PATH, [])
+
+    if not defaults:
+        defaults = [
+            {"id": "default_1", "name": "Standard High Quality", "tags": ["quality: high", "quality: best", "rating: safe"]},
+            {"id": "default_2", "name": "Photorealistic", "tags": ["photorealistic", "8k", "highres", "masterpiece"]},
+        ]
+        try:
+            save_json(DEFAULT_PRESETS_PATH, defaults)
+        except:
+            pass
+
+    # Merge strategy: Join lists.
+    # Note: IDs should be unique.
+    return web.json_response({"defaults": defaults, "customs": customs})
+
+
+@PromptServer.instance.routes.post("/simple-prompt/presets/save")
+async def save_presets_api(request):
+    try:
+        data = await request.json()
+        presets = data.get("presets", [])
+        save_json(CUSTOM_PRESETS_PATH, presets)
+        return web.json_response({"status": "success"})
+    except Exception as e:
         return web.json_response({"error": str(e)}, status=500)
 
 

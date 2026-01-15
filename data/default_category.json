@@ -1,0 +1,37 @@
+[
+    {
+        "id": 0,
+        "name": "General",
+        "color": "#0075db"
+    },
+    {
+        "id": 1,
+        "name": "Artist",
+        "color": "#c00004"
+    },
+    {
+        "id": 3,
+        "name": "Copyright",
+        "color": "#c000c0"
+    },
+    {
+        "id": 4,
+        "name": "Character",
+        "color": "#00aa00"
+    },
+    {
+        "id": 5,
+        "name": "Meta",
+        "color": "#fd9200"
+    },
+    {
+        "id": 6,
+        "name": "Special",
+        "color": "#ffd700"
+    },
+    {
+        "id": 7,
+        "name": "Rating",
+        "color": "#ff69b4"
+    }
+]

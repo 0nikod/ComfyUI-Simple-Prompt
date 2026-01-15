@@ -3,6 +3,10 @@ import { ref, onMounted } from 'vue';
 import ModalWrapper from './components/ModalWrapper.vue';
 import TextEditor from './components/TextEditor.vue';
 import { DuckDBService } from './utils/duckdbService';
+import { settings } from './utils/settings';
+import { metaService } from './utils/metaService';
+import { textToTags, tagsToText } from './utils/promptParser';
+import type { TagItem } from './utils/types';
 
 const props = defineProps<{
     initialPrompt: string;
@@ -44,8 +48,40 @@ const closeModal = () => {
     emit('close');
 };
 
-const saveChanges = () => {
-    emit('save', promptText.value);
+const saveChanges = async () => {
+  let finalPrompt = promptText.value;
+
+  // Auto Meta Logic
+  if (settings.autoMetaEnabled) {
+      if (metaService.presets.value.length === 0) {
+          await metaService.fetchPresets();
+      }
+      
+      const metas = metaService.getActiveTags();
+      if (metas.length > 0) {
+          let tags = textToTags(finalPrompt);
+          
+          const ratingTags = tags.filter(t => t.text.toLowerCase().startsWith('rating:'));
+          const otherTags = tags.filter(t => !t.text.toLowerCase().startsWith('rating:'));
+          const existingTexts = new Set(tags.map(t => t.text));
+          
+          const metaTagsToAdd = metas.filter(m => !existingTexts.has(m));
+          
+          if (metaTagsToAdd.length > 0) {
+               const newMetaItems: TagItem[] = metaTagsToAdd.map(m => ({ 
+                   text: m, 
+                   weight: 1.0, 
+                   enabled: true 
+               }));
+               
+               // others + newMetas + ratings
+               const combined = [...otherTags, ...newMetaItems, ...ratingTags];
+               finalPrompt = tagsToText(combined);
+          }
+      }
+  }
+
+    emit('save', finalPrompt);
     showModal.value = false; 
     // We let the parent handle unmounting
 };

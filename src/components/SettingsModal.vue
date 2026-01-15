@@ -4,6 +4,8 @@ import { useI18n } from 'vue-i18n';
 import { Icon } from '@iconify/vue';
 import { settings } from '../utils/settings';
 import TagManager from './TagManager.vue';
+import { categoryService, type CategoryItem } from '../utils/categoryService';
+import { metaService } from '../utils/metaService';
 
 const props = defineProps({
   visible: {
@@ -31,10 +33,121 @@ const categories = [
   { id: 'editing', icon: 'mdi:pencil' },
   { id: 'interface', icon: 'mdi:translate' },
   { id: 'data', icon: 'mdi:database' },
+  { id: 'categoryManager', icon: 'mdi:palette' },
+  { id: 'metaManager', icon: 'mdi:format-list-bulleted-type' },
   { id: 'tagManager', icon: 'mdi:tag-multiple' }
 ];
 
 const activeCategory = ref('textFormat');
+
+// Category Management Logic
+const newCatName = ref('');
+const newCatColor = ref('#aabbcc');
+
+const handleAddCategory = () => {
+    if (!newCatName.value) return;
+    
+    const cats = categoryService.categories.value;
+    const maxId = cats.length > 0 ? Math.max(...cats.map(c => c.id)) : 5;
+    let nextId = maxId + 1;
+    if (nextId < 6) nextId = 6;
+    
+    while (cats.some(c => c.id === nextId)) {
+        nextId++;
+    }
+    
+    const newCat: CategoryItem = {
+        id: nextId,
+        name: newCatName.value,
+        color: newCatColor.value
+    };
+    
+    const knownDefaultIds = [0, 1, 3, 4, 5, 6, 7];
+    const customs = [...cats.filter(c => !knownDefaultIds.includes(c.id)), newCat];
+    
+    categoryService.saveCustomCategories(customs).then(() => {
+        newCatName.value = '';
+    });
+};
+
+const handleDeleteCategory = (id: number) => {
+    if (!confirm(t('common.confirm') || 'Are you sure?')) return;
+    const cats = categoryService.categories.value;
+    const knownDefaultIds = [0, 1, 3, 4, 5, 6, 7];
+    if (knownDefaultIds.includes(id)) {
+        alert("Cannot delete default category.");
+        return;
+    }
+    
+    const customs = cats.filter(c => !knownDefaultIds.includes(c.id) && c.id !== id);
+    categoryService.saveCustomCategories(customs);
+};
+
+// Meta Preset Management Logic
+const presetName = ref('');
+const presetTags = ref(''); // string, comma separated
+const editingPresetId = ref<string | null>(null);
+
+watch(activeCategory, (newVal) => {
+    if (newVal === 'categoryManager') {
+        categoryService.fetchCategories();
+    } else if (newVal === 'metaManager') {
+        metaService.fetchPresets();
+    }
+});
+
+const handleSavePreset = () => {
+    if (!presetName.value || !presetTags.value) {
+        alert("Name and tags are required");
+        return;
+    }
+    
+    // Parse tags: comma/newline
+    const tags = presetTags.value.split(/[,\n]/).map(s => s.trim()).filter(Boolean);
+    
+    if (editingPresetId.value) {
+        // Update existing
+        const index = metaService.customPresets.value.findIndex(p => p.id === editingPresetId.value);
+        if (index !== -1) {
+            metaService.customPresets.value[index] = {
+                ...metaService.customPresets.value[index],
+                name: presetName.value,
+                tags: tags
+            };
+        }
+    } else {
+        // Create new
+        const newPreset = {
+            id: 'custom_' + Date.now(),
+            name: presetName.value,
+            tags: tags
+        };
+        metaService.customPresets.value.push(newPreset);
+    }
+    
+    metaService.saveCustomPresets(metaService.customPresets.value).then(() => {
+        resetPresetForm();
+    });
+};
+
+const handleEditPreset = (preset: any) => {
+    editingPresetId.value = preset.id;
+    presetName.value = preset.name;
+    presetTags.value = preset.tags.join(', ');
+};
+
+const handleDeletePreset = (id: string) => {
+   if (!confirm(t('common.confirm') || 'Are you sure?')) return;
+   const newCustoms = metaService.customPresets.value.filter(p => p.id !== id);
+   metaService.customPresets.value = newCustoms;
+   metaService.saveCustomPresets(newCustoms);
+};
+
+const resetPresetForm = () => {
+    presetName.value = '';
+    presetTags.value = '';
+    editingPresetId.value = null;
+};
 
 // Update logic
 const updateStatus = ref('');
@@ -337,6 +450,91 @@ watch(() => props.visible, (newVal) => {
               </div>
             </div>
 
+
+          <!-- Section: Category Manager -->
+          <div v-if="activeCategory === 'categoryManager'" class="settings-section full-width">
+              <h3 class="section-title">
+                <Icon icon="mdi:palette" />
+                {{ t('settings.sections.categoryManager') || 'Category Management' }}
+              </h3>
+              
+              <div class="category-manager">
+                  <div class="add-cat-form">
+                      <input v-model="newCatName" placeholder="Category Name" class="input-text" />
+                      <input v-model="newCatColor" type="color" class="input-color" />
+                      <button class="btn-primary" @click="handleAddCategory">Add</button>
+                  </div>
+                  
+                  <div class="cat-list">
+                      <div v-for="cat in categoryService.categories.value" :key="cat.id" class="cat-item">
+                          <div class="cat-dot" :style="{ backgroundColor: cat.color }"></div>
+                          <span class="cat-name">{{ cat.name }}</span>
+                          <span class="cat-id">#{{ cat.id }}</span>
+                           <!-- Only allow delete for customs -->
+                          <button v-if="![0,1,3,4,5,6,7].includes(cat.id)" class="btn-icon" @click="handleDeleteCategory(cat.id)">
+                              <Icon icon="mdi:delete" />
+                          </button>
+                      </div>
+                  </div>
+              </div>
+          </div>
+
+          <!-- Section: Meta Manager (Presets) -->
+          <div v-if="activeCategory === 'metaManager'" class="settings-section full-width">
+              <h3 class="section-title">
+                <Icon icon="mdi:format-list-bulleted-type" />
+                {{ t('settings.sections.metaManager') || 'Meta Presets Management' }}
+              </h3>
+              
+              <div class="meta-manager">
+                  <div class="preset-form">
+                      <h4>{{ editingPresetId ? 'Edit Preset' : 'New Preset' }}</h4>
+                      <div class="form-row">
+                          <input v-model="presetName" placeholder="Preset Name (e.g. Model A)" class="input-text" />
+                      </div>
+                      <div class="form-row">
+                          <textarea 
+                            v-model="presetTags" 
+                            placeholder="Tags (comma separated, e.g. quality:best, rating:safe)" 
+                            class="input-textarea"
+                          ></textarea>
+                      </div>
+                      <div class="form-actions">
+                          <button class="btn-cancel" @click="resetPresetForm" v-if="presetName || presetTags">Cancel</button>
+                           <button class="btn-primary" @click="handleSavePreset">{{ editingPresetId ? 'Update' : 'Add' }}</button>
+                      </div>
+                  </div>
+                  
+                  <div class="preset-list">
+                      <h4>Custom Presets</h4>
+                      <div v-for="p in metaService.customPresets.value" :key="p.id" class="preset-item">
+                          <div class="preset-info">
+                              <span class="preset-name">{{ p.name }}</span>
+                              <span class="preset-tags">{{ p.tags.join(', ') }}</span>
+                          </div>
+                          <div class="preset-actions">
+                             <button class="btn-icon" @click="handleEditPreset(p)">
+                                  <Icon icon="mdi:pencil" />
+                              </button>
+                              <button class="btn-icon" @click="handleDeletePreset(p.id)">
+                                  <Icon icon="mdi:delete" />
+                              </button>
+                          </div>
+                      </div>
+                      <div v-if="metaService.customPresets.value.length === 0" class="empty-msg">No custom presets.</div>
+                  </div>
+                  
+                   <div class="preset-list" style="margin-top: 20px;">
+                      <h4 style="color: #888;">Default Presets (Read-only)</h4>
+                      <div v-for="p in metaService.defaultPresets.value" :key="p.id" class="preset-item default">
+                         <div class="preset-info">
+                              <span class="preset-name">{{ p.name }}</span>
+                              <span class="preset-tags">{{ p.tags.join(', ') }}</span>
+                          </div>
+                      </div>
+                  </div>
+              </div>
+          </div>
 
           <!-- Section: Tag Manager -->
           <div v-if="activeCategory === 'tagManager'" class="settings-section full-width">
@@ -741,5 +939,160 @@ input:checked + .slider:before {
 .fade-enter-from,
 .fade-leave-to {
   opacity: 0;
+}
+
+/* Category Manager Styles */
+.category-manager {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.add-cat-form {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    background: #252526;
+    padding: 10px;
+    border-radius: 4px;
+}
+
+.input-text {
+    flex: 1;
+    background: #333;
+    border: 1px solid #444;
+    color: white;
+    padding: 6px 10px;
+    border-radius: 4px;
+}
+
+.input-color {
+    background: none;
+    border: none;
+    width: 40px;
+    height: 30px;
+    cursor: pointer;
+}
+
+.cat-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.cat-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: #252526;
+    padding: 6px 10px;
+    border-radius: 4px;
+    border: 1px solid #333;
+}
+
+.cat-dot {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+}
+
+.cat-name {
+    font-weight: 500;
+}
+
+.cat-id {
+    color: #666;
+    font-size: 11px;
+}
+
+.btn-icon {
+    background: none;
+    border: none;
+    color: #888;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+}
+
+.btn-icon:hover {
+    color: #f44336;
+}
+
+.meta-manager {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+.preset-form {
+    background: #252526;
+    padding: 16px;
+    border-radius: 6px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.form-row {
+    display: flex;
+    flex-direction: column;
+}
+
+.input-textarea {
+     background: #333;
+    border: 1px solid #444;
+    color: white;
+    padding: 8px;
+    border-radius: 4px;
+    min-height: 60px;
+    resize: vertical;
+}
+
+.form-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+}
+
+.preset-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.preset-item {
+    background: #252526;
+    padding: 12px;
+    border-radius: 6px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border: 1px solid #333;
+}
+
+.preset-info {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.preset-name {
+    font-weight: 600;
+    color: #e0e0e0;
+}
+
+.preset-tags {
+    font-size: 12px;
+    color: #888;
+}
+
+.preset-actions {
+    display: flex;
+    gap: 8px;
+}
+
+.empty-msg {
+    color: #666;
+    font-style: italic;
 }
 </style>

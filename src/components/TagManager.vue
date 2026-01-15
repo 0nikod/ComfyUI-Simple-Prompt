@@ -4,7 +4,8 @@ import { Icon } from '@iconify/vue';
 import { useI18n } from 'vue-i18n';
 import CustomTagModal from './CustomTagModal.vue';
 import { settings } from '../utils/settings';
-import { TagCategory, CATEGORY_COLORS } from '../utils/types';
+import { type TagCategory, CATEGORY_COLORS } from '../utils/types'; // Keep for now if used, but prefer service
+import { categoryService } from '../utils/categoryService';
 
 const { t } = useI18n();
 
@@ -107,19 +108,61 @@ watch(currentPage, () => {
 
 onMounted(() => {
     fetchTags();
+    categoryService.fetchCategories();
 });
+
+// Inline Add Logic
+const newTagName = ref('');
+const newTagCategory = ref(0);
+const isAddingKey = ref(false);
+
+const handleInlineAdd = async () => {
+    if (!newTagName.value.trim()) return;
+    
+    // Parse tags: split by comma or newline
+    const names = newTagName.value.split(/[,\n]/).map(n => n.trim()).filter(Boolean);
+    if (names.length === 0) return;
+
+    isAddingKey.value = true;
+    try {
+        // Construct Batch Payload
+        const tagsPayload = names.map(name => ({
+            name: name,
+            category: newTagCategory.value,
+            post_count: 0,
+            alias: [],
+            source: activeTab.value
+        }));
+
+        const response = await fetch('/simple-prompt/add-custom-tag', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ tags: tagsPayload })
+        });
+        
+        const res = await response.json();
+
+        if (response.ok) {
+            newTagName.value = '';
+            fetchTags();
+            // Show toast or alert? Just clean input is standard.
+        } else {
+            alert('Add failed: ' + res.error);
+        }
+    } catch (e: any) {
+        alert('Add failed: ' + e.message);
+    } finally {
+        isAddingKey.value = false;
+    }
+};
 
 // Helpers
 const getCategoryLabel = (catId: number) => {
-    // Simple mapping or use i18n if available mapping exists
-    const map: Record<number, string> = {
-        0: 'General', 1: 'Artist', 3: 'Copyright', 4: 'Character', 5: 'Meta'
-    };
-    return map[catId] || 'Unknown';
+    return categoryService.getCategoryName(catId);
 };
 
 const getCategoryColor = (catId: number) => {
-    return CATEGORY_COLORS[catId as TagCategory] || '#aaa';
+    return categoryService.getCategoryColor(catId);
 }
 </script>
 
@@ -228,6 +271,28 @@ const getCategoryColor = (catId: number) => {
             >
                 <Icon icon="mdi:chevron-right" />
             </button>
+        </div>
+
+        <!-- Add Tag Bar -->
+        <div class="add-tag-bar" v-if="canEdit">
+             <div class="add-inputs">
+                <input 
+                    v-model="newTagName" 
+                    :placeholder="t('settings.sections.addPlaceholder') || 'New Tag Name (comma separated for multiple)'" 
+                    class="input-new-name"
+                    @keyup.enter="handleInlineAdd"
+                />
+                <select v-model="newTagCategory" class="select-new-cat">
+                     <option v-for="cat in categoryService.categories.value" :key="cat.id" :value="cat.id">
+                        {{ cat.name }}
+                    </option>
+                </select>
+                <button class="btn-add" @click="handleInlineAdd" :disabled="isAddingKey">
+                    <Icon v-if="isAddingKey" icon="mdi:loading" class="spin" />
+                    <Icon v-else icon="mdi:plus" />
+                    Add
+                </button>
+             </div>
         </div>
 
         <!-- Edit Modal -->
@@ -468,5 +533,56 @@ const getCategoryColor = (catId: number) => {
 .page-info {
     font-size: 13px;
     color: #888;
+}
+
+.add-tag-bar {
+    margin-top: 16px;
+    padding: 12px;
+    background-color: #252526;
+    border-radius: 4px;
+    border: 1px solid #333;
+}
+
+.add-inputs {
+    display: flex;
+    gap: 10px;
+}
+
+.input-new-name {
+    flex: 2;
+    background: #333;
+    border: 1px solid #444;
+    color: white;
+    padding: 6px 10px;
+    border-radius: 4px;
+}
+
+.select-new-cat {
+    flex: 1;
+    background: #333;
+    border: 1px solid #444;
+    color: white;
+    padding: 6px 10px;
+    border-radius: 4px;
+}
+
+.btn-add {
+    padding: 6px 16px;
+    background-color: #0075db;
+    border: none;
+    color: white;
+    border-radius: 4px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.btn-add:hover:not(:disabled) {
+    background-color: #0060b5;
+}
+
+.btn-add:disabled {
+    opacity: 0.6;
 }
 </style>

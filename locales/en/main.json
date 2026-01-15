@@ -16,7 +16,10 @@
       "interface": "Interface",
       "interface": "Interface",
       "data": "Data Management",
-      "tagManager": "Tag Manager"
+      "tagManager": "Tag Manager",
+      "addPlaceholder": "New Tag Name (comma separated for multiple)",
+      "categoryManager": "Category Management",
+      "metaManager": "Meta Tag Management"
     },
     "items": {
       "convertUnderscore": "Convert Underscore to Space",
@@ -49,6 +52,16 @@
       "upToDate": "Latest version: ",
       "updateAvailable": "Update available: ",
       "unknown": "Unknown"
+    },
+    "meta": {
+      "title": "Meta Presets Management",
+      "newPreset": "New Preset",
+      "editPreset": "Edit Preset",
+      "presetName": "Preset Name",
+      "presetTags": "Tags (comma separated)",
+      "customPresets": "Custom Presets",
+      "defaultPresets": "Default Presets (Read-only)",
+      "noPresets": "No custom presets."
     },
     "autoSave": "Settings are saved automatically"
   },
@@ -96,6 +109,16 @@
     "noMatches": "No matching tags",
     "decreaseWeight": "Decrease weight",
     "increaseWeight": "Increase weight",
-    "removeTag": "Remove tag"
+    "removeTag": "Remove tag",
+    "format": "Format",
+    "formatTitle": "Format Text",
+    "organize": "Organize",
+    "organizeTitle": "Organize Tags",
+    "autoMeta": "Auto Meta",
+    "qualityWords": "Quality Tags",
+    "autoMeta": "Auto Meta",
+    "selectPreset": "Select Meta Preset",
+    "presetSearchPlaceholder": "Search presets...",
+    "editInSettings": "Edit in Settings > Meta"
   }
 }

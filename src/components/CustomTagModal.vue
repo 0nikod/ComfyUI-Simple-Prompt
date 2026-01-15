@@ -2,7 +2,8 @@
 import { ref, watch, computed } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { Icon } from '@iconify/vue';
-import { TagCategory, CATEGORY_COLORS } from '../utils/types';
+import { categoryService } from '../utils/categoryService';
+import { TagCategory } from '../utils/types';
 
 const props = defineProps<{
   visible: boolean;
@@ -21,7 +22,7 @@ const { t } = useI18n();
 // Form State
 const form = ref({
   name: '',
-  category: TagCategory.GENERAL,
+  category: 0, // General default
   post_count: 0,
   alias: ''
 });
@@ -30,19 +31,13 @@ const isSubmitting = ref(false);
 const errorMsg = ref('');
 const successMsg = ref('');
 
-// Categories
-const categories = [
-  { value: TagCategory.GENERAL, label: 'General', color: CATEGORY_COLORS[TagCategory.GENERAL] },
-  { value: TagCategory.ARTIST, label: 'Artist', color: CATEGORY_COLORS[TagCategory.ARTIST] },
-  { value: TagCategory.COPYRIGHT, label: 'Copyright', color: CATEGORY_COLORS[TagCategory.COPYRIGHT] },
-  { value: TagCategory.CHARACTER, label: 'Character', color: CATEGORY_COLORS[TagCategory.CHARACTER] },
-  { value: TagCategory.META, label: 'Meta', color: CATEGORY_COLORS[TagCategory.META] },
-];
+// Fetch categories on mount/visible?
+// Used in template: categoryService.categories
 
 const resetForm = () => {
   form.value = {
     name: '',
-    category: TagCategory.GENERAL,
+    category: 0,
     post_count: 0,
     alias: ''
   };
@@ -152,19 +147,14 @@ const handleSave = async () => {
           <!-- Category Select -->
           <div class="form-group">
             <label>{{ t('customTag.categoryLabel') }}</label>
-            <div class="category-options">
-                <button 
-                    v-for="cat in categories" 
-                    :key="cat.value"
-                    type="button"
-                    class="category-btn"
-                    :class="{ active: form.category === cat.value }"
-                    :style="{ '--cat-color': cat.color }"
-                    @click="form.category = cat.value"
-                >
-                    <span class="dot"></span>
-                    {{ cat.label }} <!-- TODO: i18n these labels properly in future -->
-                </button>
+            <div class="category-select-wrapper">
+                <select v-model="form.category" class="sp-select">
+                    <option v-for="cat in categoryService.categories.value" :key="cat.id" :value="cat.id">
+                        {{ cat.name }}
+                    </option>
+                </select>
+                <!-- Show color preview -->
+                <div class="color-preview" :style="{ backgroundColor: categoryService.getCategoryColor(form.category) }"></div>
             </div>
           </div>
 
@@ -320,42 +310,32 @@ const handleSave = async () => {
   border-color: #0075db;
 }
 
-.category-options {
+.category-select-wrapper {
     display: flex;
-    flex-wrap: wrap;
-    gap: 8px;
+    gap: 10px;
+    align-items: center;
 }
 
-.category-btn {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    padding: 6px 12px;
+.sp-select {
+    flex: 1;
     background-color: #2a2a2a;
     border: 1px solid #444;
-    border-radius: 20px;
-    color: #aaa;
-    cursor: pointer;
-    font-size: 13px;
-    transition: all 0.2s;
+    color: #e0e0e0;
+    padding: 10px;
+    border-radius: 4px;
+    font-size: 14px;
+    outline: none;
 }
 
-.category-btn .dot {
-    width: 8px;
-    height: 8px;
-    border-radius: 50%;
-    background-color: var(--cat-color);
+.sp-select:focus {
+    border-color: #0075db;
 }
 
-.category-btn:hover {
-    background-color: #333;
-}
-
-.category-btn.active {
-    background-color: #383838;
-    border-color: var(--cat-color);
-    color: white;
-    box-shadow: 0 0 0 1px var(--cat-color);
+.color-preview {
+    width: 24px;
+    height: 24px;
+    border-radius: 4px;
+    border: 1px solid #444;
 }
 
 .hint {

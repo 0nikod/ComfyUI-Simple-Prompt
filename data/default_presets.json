@@ -1,0 +1,21 @@
+[
+    {
+        "id": "default_1",
+        "name": "Standard High Quality",
+        "tags": [
+            "quality: high",
+            "quality: best",
+            "rating: safe"
+        ]
+    },
+    {
+        "id": "default_2",
+        "name": "Photorealistic",
+        "tags": [
+            "photorealistic",
+            "8k",
+            "highres",
+            "masterpiece"
+        ]
+    }
+]

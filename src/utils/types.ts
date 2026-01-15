@@ -28,5 +28,5 @@ export interface TagItem {
     text: string;        // Tag text, e.g. "1girl"
     weight: number;      // Weight, default 1.0
     enabled: boolean;    // Is enabled
-    category?: TagCategory; // Category
+    category?: number; // Changed from TagCategory to facilitate dynamic IDs
 }

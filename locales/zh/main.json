@@ -16,7 +16,10 @@
       "interface": "界面",
       "interface": "界面",
       "data": "数据管理",
-      "tagManager": "标签管理"
+      "tagManager": "标签管理",
+      "addPlaceholder": "输入标签名称 (支持逗号分隔批量添加)",
+      "categoryManager": "分类管理",
+      "metaManager": "元数据管理"
     },
     "items": {
       "convertUnderscore": "下划线转空格",
@@ -49,6 +52,16 @@
       "upToDate": "已是最新：",
       "updateAvailable": "有可用更新：",
       "unknown": "未知"
+    },
+    "meta": {
+      "title": "Meta 预设管理",
+      "newPreset": "新建预设",
+      "editPreset": "编辑预设",
+      "presetName": "预设名称",
+      "presetTags": "标签 (逗号分隔)",
+      "customPresets": "自定义预设",
+      "defaultPresets": "默认预设 (只读)",
+      "noPresets": "无自定义预设"
     },
     "autoSave": "设置会自动保存"
   },
@@ -96,6 +109,16 @@
     "noMatches": "无匹配标签",
     "decreaseWeight": "减小权重",
     "increaseWeight": "增大权重",
-    "removeTag": "删除标签"
+    "removeTag": "删除标签",
+    "format": "格式化",
+    "formatTitle": "格式化文本",
+    "organize": "整理",
+    "organizeTitle": "整理标签",
+    "autoMeta": "自动Meta",
+    "qualityWords": "质量标签",
+    "autoMeta": "自动Meta",
+    "selectPreset": "选择 Meta 预设",
+    "presetSearchPlaceholder": "搜索预设...",
+    "editInSettings": "去 设置 > Meta 编辑"
   }
 }
