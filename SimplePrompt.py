@@ -930,11 +930,8 @@ async def list_presets_api(request):
     defaults = load_json(DEFAULT_PRESETS_PATH, [])
     customs = load_json(CUSTOM_PRESETS_PATH, [])
 
-    if not defaults:
-        defaults = [
-            {"id": "default_1", "name": "Standard High Quality", "tags": ["quality: high", "quality: best", "rating: safe"]},
-            {"id": "default_2", "name": "Photorealistic", "tags": ["photorealistic", "8k", "highres", "masterpiece"]},
-        ]
+    if not os.path.exists(DEFAULT_PRESETS_PATH):
+        defaults = []
         try:
             save_json(DEFAULT_PRESETS_PATH, defaults)
         except:
