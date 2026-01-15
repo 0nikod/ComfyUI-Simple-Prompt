@@ -1,5 +1,7 @@
 # ComfyUI Simple Prompt
 
+[中文](readme_zh.md) | [English](README.md)
+
 这是一个功能强大的 ComfyUI 提示词编辑/管理节点，结合了文本编辑和可视化标签管理的优势。
 
 ![Simple Prompt Interface](./doc/images/preview.png)
@@ -35,7 +37,7 @@
 2.  克隆本仓库：
     ```bash
     git clone https://github.com/0nikod/ComfyUI-Simple-Prompt.git
-    cd comfyui_simple_prompt
+    cd Comfyui-Simple-Prompt
     ```
 3.  安装依赖 (必须安装 DuckDB)：
     ```bash

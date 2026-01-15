@@ -1,5 +1,8 @@
 # ComfyUI Simple Prompt
 
+[中文](readme_zh.md) | [English](README.md)
+
+
 A powerful, visual prompt editing node for ComfyUI that blends the best of text-based and visual tag management.
 
 ![Simple Prompt Interface](./doc/images/preview.png)
@@ -36,7 +39,7 @@ A powerful, visual prompt editing node for ComfyUI that blends the best of text-
 2.  Clone this repository:
     ```bash
     git clone https://github.com/0nikod/ComfyUI-Simple-Prompt.git
-    cd comfyui_simple_prompt
+    cd Comfyui-Simple-Prompt
     ```
 3.  Install dependencies (DuckDB is required):
     ```bash
