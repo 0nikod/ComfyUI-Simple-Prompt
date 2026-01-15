@@ -2,7 +2,7 @@
 import { computed, ref, nextTick } from 'vue';
 import { useI18n } from 'vue-i18n';
 import type { TagItem } from '../utils/types';
-import { CATEGORY_COLORS, TagCategory } from '../utils/types';
+import { CategoryService } from '../utils/categoryService';
 import { Icon } from '@iconify/vue';
 
 const props = defineProps<{
@@ -19,7 +19,7 @@ const { t } = useI18n();
 
 // Get category color
 const categoryColor = computed(() => {
-  return CATEGORY_COLORS[props.tag.category || TagCategory.GENERAL];
+  return CategoryService.getInstance().getColor(props.tag.category || 0);
 });
 
 // Show weight badge

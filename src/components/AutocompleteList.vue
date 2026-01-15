@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue';
 import { useI18n } from 'vue-i18n';
-import { CATEGORY_COLORS, TagCategory } from '../utils/types';
+import { CategoryService } from '../utils/categoryService';
 import { Icon } from '@iconify/vue';
 
 const props = defineProps<{
@@ -21,7 +21,7 @@ const handleSelect = (item: any) => {
 };
 
 const getCategoryColor = (category: number) => {
-  return CATEGORY_COLORS[category as TagCategory] || CATEGORY_COLORS[TagCategory.GENERAL];
+  return CategoryService.getInstance().getColor(category);
 };
 
 const formatCount = (count: number | bigint) => {

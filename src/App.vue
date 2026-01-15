@@ -3,6 +3,7 @@ import { ref, onMounted } from 'vue';
 import ModalWrapper from './components/ModalWrapper.vue';
 import TextEditor from './components/TextEditor.vue';
 import { DuckDBService } from './utils/duckdbService';
+import { CategoryService } from './utils/categoryService';
 import { settings } from './utils/settings';
 import { metaService } from './utils/metaService';
 import { textToTags, applyAutoMeta } from './utils/promptParser';
@@ -24,6 +25,7 @@ onMounted(async () => {
     try {
         const db = DuckDBService.getInstance();
         await db.init();
+        await CategoryService.getInstance().init();
         dbStatus.value = 'Ready';
     } catch (e) {
         console.error("DB Error:", e);

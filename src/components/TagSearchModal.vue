@@ -1,9 +1,9 @@
 <script setup lang="ts">
-import { ref, computed, watch } from 'vue';
+import { ref, computed, watch, onMounted } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { Icon } from '@iconify/vue';
 import { DuckDBService } from '../utils/duckdbService';
-import { TagCategory, CATEGORY_COLORS } from '../utils/types';
+import { CategoryService } from '../utils/categoryService';
 
 const props = defineProps<{
   visible: boolean;
@@ -22,13 +22,19 @@ const loading = ref(false);
 const selectedCategories = ref<number[]>([]);
 
 // Category options
-const categoryOptions = computed(() => [
-  { value: TagCategory.GENERAL, label: t('search.categories.general'), color: CATEGORY_COLORS[TagCategory.GENERAL] },
-  { value: TagCategory.ARTIST, label: t('search.categories.artist'), color: CATEGORY_COLORS[TagCategory.ARTIST] },
-  { value: TagCategory.CHARACTER, label: t('search.categories.character'), color: CATEGORY_COLORS[TagCategory.CHARACTER] },
-  { value: TagCategory.COPYRIGHT, label: t('search.categories.copyright'), color: CATEGORY_COLORS[TagCategory.COPYRIGHT] },
-  { value: TagCategory.META, label: t('search.categories.meta'), color: CATEGORY_COLORS[TagCategory.META] },
-]);
+const categoryOptions = computed(() => {
+    const service = CategoryService.getInstance();
+    // Default fallback if empty (though service should have defaults)
+    const all = service.getAll();
+    if (all.length === 0) return [];
+    
+    // Map to options, maybe filtering or translating labels if they are standard ones
+    return all.map(cat => ({
+        value: cat.value,
+        label: cat.value <= 5 ? t(`search.categories.${cat.label.toLowerCase()}`) : cat.label,
+        color: cat.color
+    }));
+});
 
 // Toggle category filter
 const toggleCategory = (category: number) => {
@@ -98,18 +104,26 @@ watch(() => props.visible, (newVal) => {
     searchQuery.value = '';
     searchResults.value = [];
     selectedCategories.value = [];
+  } else {
+      // Ensure categories are loaded
+      CategoryService.getInstance().init();
   }
 });
 
 // Get category label
 const getCategoryLabel = (category: number) => {
-  const option = categoryOptions.value.find(opt => opt.value === category);
-  return option ? option.label : t('search.categories.unknown');
+  const service = CategoryService.getInstance();
+  const cat = service.getCategory(category);
+  // Try translation for standard categories
+  if (cat.value <= 5) {
+      return t(`search.categories.${cat.label.toLowerCase()}`);
+  }
+  return cat.label;
 };
 
 // Get category color
 const getCategoryColor = (category: number) => {
-  return CATEGORY_COLORS[category] || '#888';
+  return CategoryService.getInstance().getColor(category);
 };
 
 // Format post count (cached to avoid repeated toLocaleString calls)

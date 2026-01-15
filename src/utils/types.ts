@@ -10,7 +10,17 @@ export enum TagCategory {
 }
 
 /**
+ * Category Interface
+ */
+export interface Category {
+    value: number;
+    label: string;
+    color: string;
+}
+
+/**
  * Category Colors (Danbooru standard)
+ * @deprecated Use CategoryService instead
  */
 export const CATEGORY_COLORS: Record<TagCategory, string> = {
     [TagCategory.GENERAL]: '#0075db',    // Blue
