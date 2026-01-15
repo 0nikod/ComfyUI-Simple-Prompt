@@ -114,7 +114,6 @@ def init_duckdb():
         conn.execute(f"CREATE OR REPLACE VIEW all_tags_raw AS {union_query}")
 
         # 2. Create Deduplicated View (High priority wins)
-        # We assume standard schema: name, category, post_count, alias
         conn.execute("""
             CREATE OR REPLACE VIEW tags AS
             SELECT * EXCLUDE (rn) FROM (
@@ -124,7 +123,18 @@ def init_duckdb():
             ) WHERE rn = 1
         """)
 
-        logger.info("DuckDB initialized with multi-source views.")
+        # 3. Create Fast View (Excluding Repo Tags - Priority 4)
+        conn.execute("""
+            CREATE OR REPLACE VIEW tags_fast AS
+            SELECT * EXCLUDE (rn) FROM (
+                SELECT *, 
+                    ROW_NUMBER() OVER (PARTITION BY name ORDER BY priority ASC) as rn
+                FROM all_tags_raw
+                WHERE priority < 4
+            ) WHERE rn = 1
+        """)
+
+        logger.info("DuckDB initialized with multi-source views (including fast view).")
 
     except Exception as e:
         logger.error(f"DuckDB initialization failed: {e}")
@@ -189,13 +199,15 @@ def search_tags(
         return []
 
 
-def get_tags_details(conn, names: List[str]) -> Dict[str, int]:
+def get_tags_details(conn, names: List[str], fast: bool = False) -> Dict[str, int]:
     """
     Get category for a list of tag names.
     Returns a dict {name: category}
     """
     if not conn or not names:
         return {}
+
+    table_name = "tags_fast" if fast else "tags"
 
     # Cleanup names
     clean_names = [n.strip() for n in names if n.strip()]
@@ -214,7 +226,7 @@ def get_tags_details(conn, names: List[str]) -> Dict[str, int]:
     # we just query 'tags' view.
     sql = f"""
         SELECT name, category 
-        FROM tags 
+        FROM {table_name}
         WHERE name COLLATE NOCASE IN ({placeholders})
     """
 
@@ -426,11 +438,12 @@ async def get_tags_details_api(request):
     try:
         data = await request.json()
         names = data.get("names", [])
+        fast = data.get("fast", False)
 
         if not names:
             return web.json_response({})
 
-        results = get_tags_details(conn, names)
+        results = get_tags_details(conn, names, fast=fast)
         return web.json_response(results)
     except Exception as e:
         logger.error(f"Get tags details API error: {e}")

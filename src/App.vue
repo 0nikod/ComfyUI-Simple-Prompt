@@ -59,12 +59,29 @@ const saveChanges = async () => {
       
       const metas = metaService.getActiveTags();
       if (metas.length > 0) {
-          let tags = textToTags(finalPrompt);
+          const tags = textToTags(finalPrompt);
+          const tagNames = tags.map(t => t.text);
           
-          const ratingTags = tags.filter(t => t.text.toLowerCase().startsWith('rating:'));
-          const otherTags = tags.filter(t => !t.text.toLowerCase().startsWith('rating:'));
+          // Identify rating tags dynamically via API (fast=true to skip repo tags)
+          let ratingTags: TagItem[] = [];
+          let otherTags: TagItem[] = [];
+          
+          try {
+              const resp = await fetch('/simple-prompt/get-tags-details', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ names: tagNames, fast: true })
+              });
+              const categoriesMap = await resp.json(); // { name: categoryId }
+              
+              ratingTags = tags.filter(t => categoriesMap[t.text.toLowerCase()] === 7);
+              otherTags = tags.filter(t => categoriesMap[t.text.toLowerCase()] !== 7);
+          } catch (e) {
+              console.error("Failed to fetch rating info, falling back to all:", e);
+              otherTags = tags;
+          }
+
           const existingTexts = new Set(tags.map(t => t.text));
-          
           const metaTagsToAdd = metas.filter(m => !existingTexts.has(m));
           
           if (metaTagsToAdd.length > 0) {
