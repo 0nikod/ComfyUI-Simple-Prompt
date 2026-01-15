@@ -27,9 +27,9 @@ dev = [
 ]
 
 [project.urls]
-Repository = "https://github.com/0nikod/comfyui_simple_prompt"
-BugTracker = "https://github.com/0nikod/comfyui_simple_prompt/issues"
-Documentation = "https://github.com/0nikod/comfyui_simple_prompt/wiki"
+Repository = "https://github.com/0nikod/ComfyUI-Simple-Prompt"
+BugTracker = "https://github.com/0nikod/ComfyUI-Simple-Prompt/issues"
+Documentation = "https://github.com/0nikod/ComfyUI-Simple-Prompt/wiki"
 
 
 [tool.comfy]
@@ -37,7 +37,7 @@ PublisherId = "dniko0"
 DisplayName = "ComfyUI Simple Prompt"
 Icon = ""
 Tags = []
-Repository = "https://github.com/0nikod/comfyui_simple_prompt"
+Repository = "https://github.com/0nikod/ComfyUI-Simple-Prompt"
 includes = ["js"]
 
 [tool.setuptools.package-data]
