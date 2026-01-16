@@ -75,7 +75,7 @@ const handleDeleteCategory = (id: number) => {
     const cats = categoryService.categories.value;
     const knownDefaultIds = [0, 1, 3, 4, 5, 6, 7];
     if (knownDefaultIds.includes(id)) {
-        alert("Cannot delete default category.");
+        alert(t('category.cannotDeleteDefault'));
         return;
     }
     
@@ -98,7 +98,7 @@ watch(activeCategory, (newVal) => {
 
 const handleSavePreset = () => {
     if (!presetName.value || !presetTags.value) {
-        alert("Name and tags are required");
+        alert(t('category.nameRequired'));
         return;
     }
     
@@ -166,7 +166,7 @@ const handleDataUpdate = async (action: 'update_github' | 'update_liked' | 'upda
         if (action === 'update_github') {
              // 1. Check for updates first
             isChecking.value = true;
-            updateStatus.value = t('settings.checkingUpdate');
+            updateStatus.value = t('settings.items.checkingUpdate');
             
             try {
                 const checkResponse = await fetch('/simple-prompt/check-update');
@@ -180,12 +180,12 @@ const handleDataUpdate = async (action: 'update_github' | 'update_liked' | 'upda
                 isChecking.value = false;
 
                 if (!checkResult.update_available) {
-                    updateStatus.value = t('settings.upToDate') + latestVersion.value;
+                    updateStatus.value = t('settings.items.upToDate') + latestVersion.value;
                     return;
                 }
 
                 // 2. Proceed to update if available
-                updateStatus.value = t('settings.updating');
+                updateStatus.value = t('settings.items.updating');
                 
                 const updateResponse = await fetch('/simple-prompt/update-tags', {
                     method: 'POST',
@@ -196,7 +196,7 @@ const handleDataUpdate = async (action: 'update_github' | 'update_liked' | 'upda
                 const updateResult = await updateResponse.json();
                 
                 if (updateResponse.ok && updateResult.status === 'success') {
-                    updateStatus.value = t('settings.updateSuccess');
+                    updateStatus.value = t('settings.items.updateSuccess');
                 } else {
                     throw new Error(updateResult.error || updateResponse.statusText);
                 }
@@ -206,7 +206,7 @@ const handleDataUpdate = async (action: 'update_github' | 'update_liked' | 'upda
         } 
         else {
             // Local Data Update (Liked or User)
-            updateStatus.value = t('settings.updating');
+            updateStatus.value = t('settings.items.updating');
             const endpoint = '/simple-prompt/update-data';
             const payload = { action }; // 'update_liked' or 'update_user'
             
@@ -219,7 +219,7 @@ const handleDataUpdate = async (action: 'update_github' | 'update_liked' | 'upda
             const result = await response.json();
             
             if (response.ok && result.status === 'success') {
-                updateStatus.value = result.message || t('settings.updateSuccess');
+                updateStatus.value = result.message || t('settings.items.updateSuccess');
             } else {
                 throw new Error(result.error || response.statusText);
             }
@@ -227,7 +227,7 @@ const handleDataUpdate = async (action: 'update_github' | 'update_liked' | 'upda
 
     } catch (error: any) {
         console.error('Update action error:', error);
-        updateStatus.value = t('settings.updateError') + error.message;
+        updateStatus.value = t('settings.items.updateError') + error.message;
     } finally {
         isUpdating.value = false;
     }
@@ -403,7 +403,7 @@ watch(() => props.visible, (newVal) => {
                     @click="handleDataUpdate('update_github')"
                   >
                     <Icon v-if="isUpdating && activeCategory === 'data'" icon="mdi:loading" class="spin" />
-                    <span>{{ t('settings.updateNow') }}</span>
+                    <span>{{ t('settings.items.updateNow') }}</span>
                   </button>
                 </div>
               </div>
@@ -460,9 +460,9 @@ watch(() => props.visible, (newVal) => {
               
               <div class="category-manager">
                   <div class="add-cat-form">
-                      <input v-model="newCatName" placeholder="Category Name" class="input-text" />
+                      <input v-model="newCatName" :placeholder="t('category.namePlaceholder')" class="input-text" />
                       <input v-model="newCatColor" type="color" class="input-color" />
-                      <button class="btn-primary" @click="handleAddCategory">Add</button>
+                      <button class="btn-primary" @click="handleAddCategory">{{ t('category.addButton') }}</button>
                   </div>
                   
                   <div class="cat-list">
@@ -488,25 +488,25 @@ watch(() => props.visible, (newVal) => {
               
               <div class="meta-manager">
                   <div class="preset-form">
-                      <h4>{{ editingPresetId ? 'Edit Preset' : 'New Preset' }}</h4>
+                      <h4>{{ editingPresetId ? t('settings.meta.editPreset') : t('settings.meta.newPreset') }}</h4>
                       <div class="form-row">
-                          <input v-model="presetName" placeholder="Preset Name (e.g. Model A)" class="input-text" />
+                          <input v-model="presetName" :placeholder="t('settings.meta.presetNamePlaceholder')" class="input-text" />
                       </div>
                       <div class="form-row">
                           <textarea 
                             v-model="presetTags" 
-                            placeholder="Tags (comma separated, e.g. quality:best, rating:safe)" 
+                            :placeholder="t('settings.meta.presetTagsPlaceholder')" 
                             class="input-textarea"
                           ></textarea>
                       </div>
                       <div class="form-actions">
-                          <button class="btn-cancel" @click="resetPresetForm" v-if="presetName || presetTags">Cancel</button>
-                           <button class="btn-primary" @click="handleSavePreset">{{ editingPresetId ? 'Update' : 'Add' }}</button>
+                          <button class="btn-cancel" @click="resetPresetForm" v-if="presetName || presetTags">{{ t('common.cancel') }}</button>
+                           <button class="btn-primary" @click="handleSavePreset">{{ editingPresetId ? t('common.update') : t('category.addButton') }}</button>
                       </div>
                   </div>
                   
                   <div class="preset-list">
-                      <h4>Custom Presets</h4>
+                      <h4>{{ t('settings.meta.customPresetsHeading') }}</h4>
                       <div v-for="p in metaService.customPresets.value" :key="p.id" class="preset-item">
                           <div class="preset-info">
                               <span class="preset-name">{{ p.name }}</span>
@@ -521,11 +521,11 @@ watch(() => props.visible, (newVal) => {
                               </button>
                           </div>
                       </div>
-                      <div v-if="metaService.customPresets.value.length === 0" class="empty-msg">No custom presets.</div>
+                      <div v-if="metaService.customPresets.value.length === 0" class="empty-msg">{{ t('settings.meta.noCustomPresets') }}</div>
                   </div>
                   
                    <div class="preset-list" style="margin-top: 20px;">
-                      <h4 style="color: #888;">Default Presets (Read-only)</h4>
+                      <h4 style="color: #888;">{{ t('settings.meta.defaultPresetsHeading') }}</h4>
                       <div v-for="p in metaService.defaultPresets.value" :key="p.id" class="preset-item default">
                          <div class="preset-info">
                               <span class="preset-name">{{ p.name }}</span>

@@ -14,7 +14,6 @@
       "autocomplete": "补全与搜索",
       "editing": "编辑行为",
       "interface": "界面",
-      "interface": "界面",
       "data": "数据管理",
       "tagManager": "标签管理",
       "addPlaceholder": "输入标签名称 (支持逗号分隔批量添加)",
@@ -61,7 +60,15 @@
       "presetTags": "标签 (逗号分隔)",
       "customPresets": "自定义预设",
       "defaultPresets": "默认预设 (只读)",
-      "noPresets": "无自定义预设"
+      "noPresets": "无自定义预设",
+      "searchPlaceholder": "搜索...",
+      "noPresetsFound": "未找到预设。",
+      "editInSettings": "去 设置 > Meta 编辑",
+      "presetNamePlaceholder": "预设名称 (例如: Model A)",
+      "presetTagsPlaceholder": "标签 (逗号分隔, 例如: quality:best, rating:safe)",
+      "customPresetsHeading": "自定义预设",
+      "defaultPresetsHeading": "默认预设 (只读)",
+      "noCustomPresets": "无自定义预设"
     },
     "autoSave": "设置会自动保存"
   },
@@ -84,6 +91,7 @@
   },
   "customTag": {
     "title": "添加自定义标签",
+    "titleEdit": "编辑标签",
     "addBtnTitle": "添加新标签",
     "nameLabel": "标签名称",
     "namePlaceholder": "例如: my_awesome_tag",
@@ -95,7 +103,14 @@
     "aliasHint": "搜索此标签时可使用的替代名称",
     "errorNameRequired": "标签名称必填",
     "errorGeneric": "添加标签失败",
-    "successAdded": "标签添加成功！"
+    "successAdded": "标签添加成功！",
+    "successEdited": "标签更新成功！"
+  },
+  "category": {
+    "cannotDeleteDefault": "无法删除默认分类。",
+    "nameRequired": "名称和标签为必填项",
+    "namePlaceholder": "分类名称",
+    "addButton": "添加"
   },
   "editor": {
     "copy": "复制",
@@ -116,7 +131,6 @@
     "organizeTitle": "整理标签",
     "autoMeta": "自动Meta",
     "qualityWords": "质量标签",
-    "autoMeta": "自动Meta",
     "selectPreset": "选择 Meta 预设",
     "presetSearchPlaceholder": "搜索预设...",
     "editInSettings": "去 设置 > Meta 编辑"

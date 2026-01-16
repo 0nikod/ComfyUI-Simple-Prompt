@@ -99,7 +99,7 @@ const handlePresetSelect = (id: string) => {
         <div v-if="showMetaMenu" class="meta-popup">
              <!-- Search Box -->
              <div class="meta-search-box">
-                 <input v-model="metaSearchQuery" placeholder="Search..." class="meta-search-input" />
+                 <input v-model="metaSearchQuery" :placeholder="t('settings.meta.searchPlaceholder')" class="meta-search-input" />
              </div>
              
              <!-- Preset List -->
@@ -115,12 +115,12 @@ const handlePresetSelect = (id: string) => {
                     <Icon v-if="metaService.activePresetId.value === p.id" icon="mdi:check" />
                 </div>
                 <div v-if="filteredPresets.length === 0" class="meta-empty">
-                    No presets found.
+                    {{ t('settings.meta.noPresetsFound') }}
                 </div>
             </div>
             
             <div class="meta-footer">
-                <span class="meta-footer-hint">Edit in Settings > Meta</span>
+                <span class="meta-footer-hint">{{ t('settings.meta.editInSettings') }}</span>
             </div>
         </div>
     </div>

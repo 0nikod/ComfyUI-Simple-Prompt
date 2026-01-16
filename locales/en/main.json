@@ -14,7 +14,6 @@
       "autocomplete": "Autocomplete & Search",
       "editing": "Editing Behavior",
       "interface": "Interface",
-      "interface": "Interface",
       "data": "Data Management",
       "tagManager": "Tag Manager",
       "addPlaceholder": "New Tag Name (comma separated for multiple)",
@@ -61,7 +60,15 @@
       "presetTags": "Tags (comma separated)",
       "customPresets": "Custom Presets",
       "defaultPresets": "Default Presets (Read-only)",
-      "noPresets": "No custom presets."
+      "noPresets": "No custom presets.",
+      "searchPlaceholder": "Search...",
+      "noPresetsFound": "No presets found.",
+      "editInSettings": "Edit in Settings > Meta",
+      "presetNamePlaceholder": "Preset Name (e.g. Model A)",
+      "presetTagsPlaceholder": "Tags (comma separated, e.g. quality:best, rating:safe)",
+      "customPresetsHeading": "Custom Presets",
+      "defaultPresetsHeading": "Default Presets (Read-only)",
+      "noCustomPresets": "No custom presets."
     },
     "autoSave": "Settings are saved automatically"
   },
@@ -84,6 +91,7 @@
   },
   "customTag": {
     "title": "Add Custom Tag",
+    "titleEdit": "Edit Tag",
     "addBtnTitle": "Add New Tag",
     "nameLabel": "Tag Name",
     "namePlaceholder": "e.g., my_awesome_tag",
@@ -95,7 +103,14 @@
     "aliasHint": "Alternative names to search for this tag",
     "errorNameRequired": "Tag name is required",
     "errorGeneric": "Failed to add tag",
-    "successAdded": "Tag added successfully!"
+    "successAdded": "Tag added successfully!",
+    "successEdited": "Tag updated successfully!"
+  },
+  "category": {
+    "cannotDeleteDefault": "Cannot delete default category.",
+    "nameRequired": "Name and tags are required",
+    "namePlaceholder": "Category Name",
+    "addButton": "Add"
   },
   "editor": {
     "copy": "Copy",
@@ -116,7 +131,6 @@
     "organizeTitle": "Organize Tags",
     "autoMeta": "Auto Meta",
     "qualityWords": "Quality Tags",
-    "autoMeta": "Auto Meta",
     "selectPreset": "Select Meta Preset",
     "presetSearchPlaceholder": "Search presets...",
     "editInSettings": "Edit in Settings > Meta"
