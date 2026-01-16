@@ -76,7 +76,7 @@ Click the **Settings** (gear icon) to configure:
 
 ## 🤝 Contributing
 
-Contributions are welcome! Please check the [Design Document (ZH)](./doc/DESIGN_DOC_ZH.md) for architectural details.
+Contributions are welcome! Please check the [Design Document (EN)](./doc/DESIGN_DOC_EN.md) / [设计文档 (ZH)](./doc/DESIGN_DOC_ZH.md) for architectural details.
 
 ## 📄 License
 

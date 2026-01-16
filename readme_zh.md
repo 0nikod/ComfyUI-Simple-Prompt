@@ -4,7 +4,7 @@
 
 这是一个功能强大的 ComfyUI 提示词编辑/管理节点，结合了文本编辑和可视化标签管理的优势。
 
-![Simple Prompt Interface](./doc/images/preview.png)
+![Simple Prompt Interface](./doc/preview.png)
 
 ## ✨ 核心功能
 

@@ -1,70 +1,70 @@
-# ComfyUI-Simple-Prompt 架构文档
+# ComfyUI-Simple-Prompt Architecture Documentation
 
-本文档说明了 `ComfyUI-Simple-Prompt` 在 v0.1.0 重构后的架构设计。本次重构的主要目标是将核心业务逻辑与 ComfyUI 框架解耦，并支持开发模式下的热重载。
+This document describes the architectural design of `ComfyUI-Simple-Prompt` after the v0.1.0 refactor. The main goal of this refactor was to decouple the core business logic from the ComfyUI framework and support hot reloading during development.
 
-## 目录结构
+## Directory Structure
 
 ```
 ComfyUI-Simple-Prompt/
 ├── simple_prompt/
-│   ├── __init__.py           # 包初始化
-│   ├── core/                 # 核心业务逻辑（平台无关）
-│   │   ├── config.py         # 路径配置
-│   │   ├── database.py       # DuckDB 连接与初始化
-│   │   ├── tags.py           # 标签搜索与管理逻辑
-│   │   ├── categories.py     # 分类管理逻辑
-│   │   ├── presets.py        # 预设管理逻辑
-│   │   └── utils.py          # 通用工具函数
-│   ├── api/                  # API 抽象层
-│   │   └── handlers.py       # 纯函数式的请求处理器
-│   └── comfyui/              # ComfyUI 适配层
-│       ├── nodes.py          # 节点定义 (SimplePrompt)
-│       └── server.py         # PromptServer 路由注册 & 热重载逻辑
-├── tests/                    # 单元测试
-├── js/                       # 前端编译产物
-├── src/                      # 前端源代码
-├── __init__.py               # ComfyUI 入口点
-└── pyproject.toml            # Python 项目配置
+│   ├── __init__.py           # Package initialization
+│   ├── core/                 # Core business logic (platform-independent)
+│   │   ├── config.py         # Path configurations
+│   │   ├── database.py       # DuckDB connection and initialization
+│   │   ├── tags.py           # Tag search and management logic
+│   │   ├── categories.py     # Category management logic
+│   │   ├── presets.py        # Preset management logic
+│   │   └── utils.py          # General utility functions
+│   ├── api/                  # API abstraction layer
+│   │   └── handlers.py       # Pure functional request handlers
+│   └── comfyui/              # ComfyUI adapter layer
+│       ├── nodes.py          # Node definitions (SimplePrompt)
+│       └── server.py         # PromptServer route registration & hot reload logic
+├── tests/                    # Unit tests
+├── js/                       # Frontend build artifacts
+├── src/                      # Frontend source code
+├── __init__.py               # ComfyUI entry point
+└── pyproject.toml            # Python project configuration
 ```
 
-## 核心设计
+## Core Design
 
-### 1. 分层架构
-- **Core Layer (`simple_prompt/core`)**: 包含纯粹的 Python 逻辑，不依赖 `aiohttp` 或 `ComfyUI`。所有数据操作（DuckDB、JSON读写）都在此层完成。
-- **API Layer (`simple_prompt/api`)**: `handlers.py` 充当中间层，接收参数并调用 Core 层函数，返回标准 Python 字典/列表。
-- **Adapter Layer (`simple_prompt/comfyui`)**: 负责将 ComfyUI 的 `PromptServer` 请求转发给 API 层，并将结果封装为 `web.json_response`。
+### 1. Layered Architecture
+- **Core Layer (`simple_prompt/core`)**: Contains pure Python logic, independent of `aiohttp` or `ComfyUI`. All data operations (DuckDB, JSON read/write) are handled in this layer.
+- **API Layer (`simple_prompt/api`)**: `handlers.py` acts as an intermediate layer, receiving parameters, calling Core layer functions, and returning standard Python dictionaries/lists.
+- **Adapter Layer (`simple_prompt/comfyui`)**: Responsible for forwarding `PromptServer` requests to the API layer and wrapping the results in `web.json_response`.
 
-### 2. 数据管理
-- 使用 **DuckDB** 作为主要查询引擎，通过视图（View）合并多个 Parquet 数据源（主仓库、用户自定义、点赞、默认）。
-- 配置文件（分类、预设）使用 JSON 存储。
-- 所有数据路径在 `simple_prompt/core/config.py` 中集中管理。
+### 2. Data Management
+- Uses **DuckDB** as the primary query engine, merging multiple Parquet data sources (Main repository, User custom, Liked, Default) through Views.
+- Configuration files (categories, presets) are stored as JSON.
+- All data paths are centrally managed in `simple_prompt/core/config.py`.
 
-## 开发指南
+## Development Guide
 
-### 热重载 (Hot Reload)
+### Hot Reload
 
-为了提高开发效率，后端支持修改代码后**无需重启 ComfyUI** 即可生效。
+To improve development efficiency, the backend supports modifying code **without restarting ComfyUI**.
 
-**启用方法：**
-设置环境变量 `SIMPLE_PROMPT_DEV=1` 启动 ComfyUI。
+**How to enable:**
+Set the environment variable `SIMPLE_PROMPT_DEV=1` when starting ComfyUI.
 
 **Windows (PowerShell):**
 ```powershell
 $env:SIMPLE_PROMPT_DEV="1"
-.\run_nvidia_gpu.bat  # 或你的启动脚本
+.\run_nvidia_gpu.bat  # Or your startup script
 ```
 
-**工作原理：**
-- `simple_prompt/comfyui/server.py` 包含一个 `_maybe_reload()` 函数。
-- 每次 API 请求（如搜索标签）到达时，如果是开发模式，该函数会使用 `importlib.reload` 重新加载 `simple_prompt.core` 和 `simple_prompt.api` 下的所有模块。
-- **注意**：修改 `nodes.py`（节点定义）或 `server.py`（路由注册）本身后，**仍需重启** ComfyUI，因为这些是在启动时注册的。
+**How it works:**
+- `simple_prompt/comfyui/server.py` contains a `_maybe_reload()` function.
+- Every API request (e.g., tag search) triggers this function. If in development mode, it uses `importlib.reload` to reload all modules under `simple_prompt.core` and `simple_prompt.api`.
+- **Note**: After modifying `nodes.py` (node definitions) or `server.py` (route registration), you **still need to restart** ComfyUI as these are registered at startup.
 
-### 运行测试
+### Running Tests
 
-使用 `pytest` 运行单元测试：
+Use `pytest` to run unit tests:
 
 ```bash
 uv run pytest tests/ -v
 ```
 
-测试环境是独立的，不依赖 ComfyUI 运行环境。
+The test environment is independent and does not rely on the ComfyUI runtime.
