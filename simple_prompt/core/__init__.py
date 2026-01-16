@@ -1,0 +1,30 @@
+# simple_prompt.core package
+# 核心业务逻辑模块（与平台无关）
+
+from .config import (
+    BASE_DIR,
+    DATA_DIR,
+    CUSTOM_DATA_DIR,
+    TAGS_PARQUET_PATH,
+    DEFAULT_TAGS_PATH,
+    USER_TAGS_PATH,
+    LIKED_TAGS_PATH,
+    DEFAULT_CATEGORY_PATH,
+    CUSTOM_CATEGORY_PATH,
+    DEFAULT_PRESETS_PATH,
+    CUSTOM_PRESETS_PATH,
+)
+
+__all__ = [
+    "BASE_DIR",
+    "DATA_DIR",
+    "CUSTOM_DATA_DIR",
+    "TAGS_PARQUET_PATH",
+    "DEFAULT_TAGS_PATH",
+    "USER_TAGS_PATH",
+    "LIKED_TAGS_PATH",
+    "DEFAULT_CATEGORY_PATH",
+    "CUSTOM_CATEGORY_PATH",
+    "DEFAULT_PRESETS_PATH",
+    "CUSTOM_PRESETS_PATH",
+]

@@ -4,16 +4,14 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "comfyui_simple_prompt"
-version = "0.1.0"
+version = "0.2.0"
 description = "Provide a simple interface to simplify prompt writing. / 提供一个简单的界面简化提示词编写。"
 authors = [{ name = "0nikod", email = "dniko0@outlook.com" }]
 readme = "README.md"
 license = { text = "MIT license" }
 requires-python = ">=3.10"
 classifiers = []
-dependencies = [
-    "duckdb>=1.4.3",
-]
+dependencies = ["duckdb>=1.4.3"]
 
 
 [project.optional-dependencies]
@@ -35,8 +33,8 @@ Documentation = "https://github.com/0nikod/ComfyUI-Simple-Prompt/wiki"
 [tool.comfy]
 PublisherId = "dniko0"
 DisplayName = "ComfyUI Simple Prompt"
-Icon = ""
-Tags = []
+Icon = "doc/preview.png"
+Tags = ["prompt", "tag", "editor", "danbooru", "autocomplete"]
 Repository = "https://github.com/0nikod/ComfyUI-Simple-Prompt"
 includes = ["js"]
 

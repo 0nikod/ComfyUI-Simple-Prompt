@@ -17,9 +17,9 @@
 *   **后端 (Python)**: 负责数据存储、检索 API 和节点逻辑。
 *   **前端 (Vue 3 + TypeScript)**: 负责 UI 交互、状态管理和通过 API 与后端通信。
 
-### 2.1 后端架构 (`SimplePrompt.py`)
+### 2.1 后端架构 (`simple_prompt/`)
 
-后端核心是一个基于 `aiohttp` 的 API 服务，挂载在 ComfyUI 的 `PromptServer` 上。
+后端核心已被重构为 `simple_prompt` 包，核心业务逻辑与 ComfyUI 适配层分离。
 
 *   **数据存储 (DuckDB)**:
     使用 DuckDB 的 In-Memory 数据库，通过 `read_parquet` 直接查询磁盘上的 Parquet 文件。
@@ -29,7 +29,7 @@
         3.  `default_tags.parquet`: 预置的默认标签。
         4.  `tags.parquet`: 包含 70k+ Danbooru 标签的主数据集。
 
-*   **关键 API**:
+*   **关键 API** (定义于 `simple_prompt/comfyui/server.py` & `simple_prompt/api/handlers.py`):
     *   `GET /simple-prompt/tags/list`: 获取标签列表（支持分页、搜索）。
     *   `GET /simple-prompt/search-tags`: 高性能搜索（支持别名匹配、分类筛选）。
     *   `POST /simple-prompt/add-custom-tag`: 添加/修改 Tag。
@@ -83,7 +83,10 @@ graph TD
 
 ## 5. 目录结构说明
 
-*   `SimplePrompt.py`: 后端入口与逻辑。
+*   `simple_prompt/`: Python 后端主要源码。
+    *   `core/`: 核心业务逻辑 (Tags, Database)。
+    *   `api/`: API 处理逻辑。
+    *   `comfyui/`: ComfyUI 节点与 Server 适配。
 *   `js/`: 编译后的前端代码 (由 Vite 生成)。
 *   `src/`: 前端源码。
 *   `data/`: 存放 Parquet 数据文件。
