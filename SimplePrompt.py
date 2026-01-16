@@ -193,7 +193,6 @@ def search_tags(
                 row_dict[cols[i]] = val
             results.append(row_dict)
         return results
-        return results
     except Exception as e:
         logger.error(f"Search failed: {e}")
         return []

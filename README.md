@@ -5,8 +5,7 @@
 
 A powerful, visual prompt editing node for ComfyUI that blends the best of text-based and visual tag management.
 
-![Simple Prompt Interface](./doc/images/preview.png)
-*(Note: Use your own preview image path if available, or generate one)*
+![Simple Prompt Interface](./doc/preview.png)
 
 ## ✨ Key Features
 

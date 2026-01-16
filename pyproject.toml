@@ -11,9 +11,7 @@ readme = "README.md"
 license = { text = "MIT license" }
 requires-python = ">=3.10"
 classifiers = []
-dependencies = [
-    "duckdb>=1.4.3",
-]
+dependencies = ["duckdb>=1.4.3"]
 
 
 [project.optional-dependencies]
@@ -35,8 +33,8 @@ Documentation = "https://github.com/0nikod/ComfyUI-Simple-Prompt/wiki"
 [tool.comfy]
 PublisherId = "dniko0"
 DisplayName = "ComfyUI Simple Prompt"
-Icon = ""
-Tags = []
+Icon = "doc/preview.png"
+Tags = ["prompt", "tag", "editor", "danbooru", "autocomplete"]
 Repository = "https://github.com/0nikod/ComfyUI-Simple-Prompt"
 includes = ["js"]
 
