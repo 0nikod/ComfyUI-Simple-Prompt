@@ -7,9 +7,18 @@ export interface CategoryData {
     color: string;
 }
 
+/**
+ * Category Item used by UI components
+ */
+export interface CategoryItem {
+    id: number;
+    name: string;
+    color: string;
+}
+
 export class CategoryService {
     private static instance: CategoryService;
-    private categories = reactive(new Map<number, CategoryData>());
+    private _categories = reactive(new Map<number, CategoryData>());
     private isInitialized = false;
 
     private constructor() {
@@ -26,24 +35,29 @@ export class CategoryService {
 
     private addDefaultCategories() {
         // Add standard Danbooru categories as baseline
-        this.categories.set(TagCategory.GENERAL, { value: TagCategory.GENERAL, label: 'General', color: CATEGORY_COLORS[TagCategory.GENERAL] });
-        this.categories.set(TagCategory.ARTIST, { value: TagCategory.ARTIST, label: 'Artist', color: CATEGORY_COLORS[TagCategory.ARTIST] });
-        this.categories.set(TagCategory.COPYRIGHT, { value: TagCategory.COPYRIGHT, label: 'Copyright', color: CATEGORY_COLORS[TagCategory.COPYRIGHT] });
-        this.categories.set(TagCategory.CHARACTER, { value: TagCategory.CHARACTER, label: 'Character', color: CATEGORY_COLORS[TagCategory.CHARACTER] });
-        this.categories.set(TagCategory.META, { value: TagCategory.META, label: 'Meta', color: CATEGORY_COLORS[TagCategory.META] });
+        this._categories.set(TagCategory.GENERAL, { value: TagCategory.GENERAL, label: 'General', color: CATEGORY_COLORS[TagCategory.GENERAL] });
+        this._categories.set(TagCategory.ARTIST, { value: TagCategory.ARTIST, label: 'Artist', color: CATEGORY_COLORS[TagCategory.ARTIST] });
+        this._categories.set(TagCategory.COPYRIGHT, { value: TagCategory.COPYRIGHT, label: 'Copyright', color: CATEGORY_COLORS[TagCategory.COPYRIGHT] });
+        this._categories.set(TagCategory.CHARACTER, { value: TagCategory.CHARACTER, label: 'Character', color: CATEGORY_COLORS[TagCategory.CHARACTER] });
+        this._categories.set(TagCategory.META, { value: TagCategory.META, label: 'Meta', color: CATEGORY_COLORS[TagCategory.META] });
     }
 
     public async init(): Promise<void> {
         if (this.isInitialized) return;
+        await this.fetchCategories();
+    }
 
+    public async fetchCategories(): Promise<void> {
         try {
             const response = await fetch('/simple-prompt/categories/list');
             if (response.ok) {
                 const data = await response.json();
 
                 if (Array.isArray(data)) {
+                    // Clear custom ones if any, but keep defaults if fetch fails next time? 
+                    // Better to just update the map.
                     data.forEach((cat: any) => {
-                        this.categories.set(cat.id, {
+                        this._categories.set(cat.id, {
                             value: cat.id,
                             label: cat.name,
                             color: cat.color
@@ -58,8 +72,29 @@ export class CategoryService {
         }
     }
 
+    public async saveCustomCategories(categories: CategoryItem[]): Promise<void> {
+        try {
+            const response = await fetch('/simple-prompt/categories/save', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ categories })
+            });
+
+            if (response.ok) {
+                // Refresh local state after save
+                await this.fetchCategories();
+            } else {
+                console.error("[CategoryService] Failed to save categories:", await response.text());
+                throw new Error("Failed to save categories");
+            }
+        } catch (error) {
+            console.error("[CategoryService] Error saving categories:", error);
+            throw error;
+        }
+    }
+
     public getCategory(id: number): CategoryData {
-        return this.categories.get(id) || {
+        return this._categories.get(id) || {
             value: id,
             label: 'Unknown',
             color: '#888888'
@@ -75,11 +110,11 @@ export class CategoryService {
     }
 
     public getAll(): CategoryData[] {
-        return Array.from(this.categories.values()).sort((a, b) => a.value - b.value);
+        return Array.from(this._categories.values()).sort((a, b) => a.value - b.value);
     }
 
     // Getter for template usage - returns array format expected by CustomTagModal
-    public get categoriesArray(): Array<{ id: number; name: string; color: string }> {
+    public get categoriesArray(): CategoryItem[] {
         return this.getAll().map(cat => ({
             id: cat.value,
             name: cat.label,
@@ -104,7 +139,16 @@ export const categoryService = {
     getCategoryColor(id: number): string {
         return CategoryService.getInstance().getColor(id);
     },
+    getCategoryName(id: number): string {
+        return CategoryService.getInstance().getName(id);
+    },
     async init() {
         return CategoryService.getInstance().init();
+    },
+    async fetchCategories() {
+        return CategoryService.getInstance().fetchCategories();
+    },
+    async saveCustomCategories(categories: CategoryItem[]) {
+        return CategoryService.getInstance().saveCustomCategories(categories);
     }
 };
