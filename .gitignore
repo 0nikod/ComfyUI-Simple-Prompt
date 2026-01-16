@@ -119,3 +119,5 @@ data/*
 !data/default*
 
 uv.lock
+
+js/*
