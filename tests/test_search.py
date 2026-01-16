@@ -3,7 +3,8 @@ import duckdb
 import tempfile
 import os
 import json
-from SimplePrompt import search_tags, get_tags_details, load_json, save_json
+from simple_prompt.core.tags import search_tags, get_tags_details
+from simple_prompt.core.utils import load_json, save_json
 
 
 class TestSearchTags(unittest.TestCase):
@@ -15,14 +16,15 @@ class TestSearchTags(unittest.TestCase):
                 name VARCHAR,
                 post_count INTEGER,
                 category INTEGER,
-                alias VARCHAR[]
+                alias VARCHAR[],
+                priority INTEGER
             )
         """)
         self.conn.execute("""
             INSERT INTO tags VALUES
-            (1, 'cat', 100, 0, ['kitty']),
-            (2, 'dog', 80, 0, ['puppy']),
-            (3, '1girl', 1000, 4, [])
+            (1, 'cat', 100, 0, ['kitty'], 4),
+            (2, 'dog', 80, 0, ['puppy'], 4),
+            (3, '1girl', 1000, 4, [], 4)
         """)
 
     def test_search_basic(self):
