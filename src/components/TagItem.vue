@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, ref, nextTick } from 'vue';
 import { useI18n } from 'vue-i18n';
-import type { TagItem } from '../utils/types';
+import { settings } from '../utils/settings';
 import { CategoryService } from '../utils/categoryService';
 import { Icon } from '@iconify/vue';
 
@@ -25,6 +25,16 @@ const categoryColor = computed(() => {
 // Show weight badge
 const showWeight = computed(() => {
   return props.tag.weight !== 1.0;
+});
+
+// Truncated Text
+const formattedText = computed(() => {
+  const max = settings.tagMaxLength;
+  const text = props.tag.text;
+  if (max > 0 && text.length > max) {
+    return text.substring(0, max) + '...';
+  }
+  return text;
 });
 
 const handleRemove = () => {
@@ -87,7 +97,7 @@ const handleKeydown = (e: KeyboardEvent) => {
     <div class="tag-dot"></div>
     
     <!-- Tag text -->
-    <span class="tag-text" @click="handleToggle">{{ tag.text }}</span>
+    <span class="tag-text" :title="tag.text" @click="handleToggle">{{ formattedText }}</span>
     
     <!-- Weight badge and controls -->
     <div v-if="showWeight && !isEditing" class="tag-weight">

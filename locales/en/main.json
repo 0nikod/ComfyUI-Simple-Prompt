@@ -35,6 +35,8 @@
       "languageDesc": "Interface language",
       "allowEditDefaultTags": "Allow Editing Default Tags",
       "allowEditDefaultTagsDesc": "Enable editing and deleting of default tags (Use with caution).",
+      "tagMaxLength": "Tag Max Length",
+      "tagMaxLengthDesc": "Maximum number of characters to display for a tag (0 to disable)",
       "updateTags": "Update Tags Data",
       "updateTagsDesc": "Download the latest tags.parquet from GitHub",
       "updateLikedTags": "Update Liked Tags",

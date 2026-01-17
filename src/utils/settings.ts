@@ -9,6 +9,7 @@ export interface UserSettings {
     language: 'en' | 'zh-CN';
     allowEditDefaultTags: boolean;
     autoMetaEnabled: boolean;
+    tagMaxLength: number;
 }
 
 const STORAGE_KEY = 'simplePrompt.settings';
@@ -22,6 +23,7 @@ const defaultSettings: UserSettings = {
     language: 'en', // Default fallback
     allowEditDefaultTags: false,
     autoMetaEnabled: false,
+    tagMaxLength: 50,
 };
 
 export const settings = reactive<UserSettings>({ ...defaultSettings });

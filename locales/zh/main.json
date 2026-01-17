@@ -35,6 +35,8 @@
       "languageDesc": "界面语言",
       "allowEditDefaultTags": "允许编辑默认标签",
       "allowEditDefaultTagsDesc": "启用后可编辑和删除默认标签（请谨慎使用）。",
+      "tagMaxLength": "标签最大长度",
+      "tagMaxLengthDesc": "标签显示的最大字符数（0 表示不限制）",
       "updateTags": "更新标签数据",
       "updateTagsDesc": "从 GitHub 下载最新的 tags.parquet",
       "updateLikedTags": "更新喜爱标签数据",

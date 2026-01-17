@@ -370,6 +370,20 @@ watch(() => props.visible, (newVal) => {
                   <option value="zh-CN">简体中文</option>
                 </select>
               </div>
+
+              <div class="setting-item">
+                <div class="setting-info">
+                  <label class="setting-label">{{ t('settings.items.tagMaxLength') }}</label>
+                  <p class="setting-desc">{{ t('settings.items.tagMaxLengthDesc') }}</p>
+                </div>
+                <input 
+                  type="number" 
+                  v-model.number="settings.tagMaxLength" 
+                  class="input-number" 
+                  min="0"
+                  step="5"
+                />
+              </div>
             </div>
 
             <!-- Section 5: Data Management -->
@@ -799,7 +813,23 @@ input:checked + .slider:before {
 /* Update Button */
 .update-actions {
   display: flex;
-  gap: 10px;
+  justify-content: flex-end;
+  margin-top: 10px;
+}
+
+.input-number {
+  background: #2a2a2a;
+  border: 1px solid #444;
+  color: #e0e0e0;
+  padding: 6px 10px;
+  border-radius: 4px;
+  width: 80px;
+  text-align: center;
+}
+
+.input-number:focus {
+  border-color: #0075db;
+  outline: none;
 }
 
 .btn-update {
