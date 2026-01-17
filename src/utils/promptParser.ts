@@ -87,6 +87,9 @@ export function textToTags(text: string): TagItem[] {
                 if (colonIndex > 0) {
                     // Has weight format
                     tagText = content.substring(0, colonIndex).trim();
+                    // Unescape parentheses in the tag text
+                    tagText = tagText.replace(/\\([()])/g, '$1');
+
                     weightText = content.substring(colonIndex + 1).trim();
                     const weight = parseFloat(weightText);
 
@@ -153,8 +156,10 @@ export function tagsToText(tags: TagItem[]): string {
 
     return enabledTags
         .map(tag => {
-            // Escape parens in the text itself to avoid parser confusion
-            const escapedText = tag.text.replace(/\(/g, '\\(').replace(/\)/g, '\\)');
+            // Escape parens in the text itself to avoid parser confusion, BUT avoid double escaping
+            const escapedText = tag.text
+                .replace(/(?<!\\)\(/g, '\\(')
+                .replace(/(?<!\\)\)/g, '\\)');
 
             if (tag.weight !== 1.0) {
                 // If it has weight, we wrap it. Inner text is already escaped.
