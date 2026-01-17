@@ -105,7 +105,10 @@ def get_tags_details(conn: Any, names: List[str], fast: bool = False) -> Dict[st
     all_variants: set[str] = set()
 
     for name in clean_names:
-        lower_name = name.lower()
+        # Pre-clean: Remove backslashes (e.g. "aaa \(bbb\)" -> "aaa (bbb)")
+        cleaned_input = name.replace("\\", "")
+        lower_name = cleaned_input.lower()
+
         # Add both space and underscore variants
         space_variant = lower_name.replace("_", " ")
         underscore_variant = lower_name.replace(" ", "_")
@@ -113,9 +116,10 @@ def get_tags_details(conn: Any, names: List[str], fast: bool = False) -> Dict[st
         all_variants.add(space_variant)
         all_variants.add(underscore_variant)
 
-        # Map both variants to the original name
-        normalized_to_original[space_variant] = lower_name
-        normalized_to_original[underscore_variant] = lower_name
+        # Map both variants to the original name AND the cleaned name
+        # We need to map back to 'name' (original input) so the caller knows which input matched
+        normalized_to_original[space_variant] = name
+        normalized_to_original[underscore_variant] = name
 
     variant_list = list(all_variants)
     placeholders = ",".join(["?"] * len(variant_list))
