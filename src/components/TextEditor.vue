@@ -37,6 +37,9 @@ const isResizing = ref(false);
 const categoryCache = ref<Record<string, number>>({});
 const fetchQueue = new Set<string>();
 let fetchTimeout: any = null;
+const TEXT_PROCESS_DEBOUNCE_MS = 300;
+let inputProcessTimeout: ReturnType<typeof setTimeout> | null = null;
+let autocompleteRequestToken = 0;
 
 const scheduleFetch = () => {
     if (fetchTimeout) clearTimeout(fetchTimeout);
@@ -96,6 +99,36 @@ const enrichTags = (rawTags: TagItem[]) => {
     return rawTags;
 };
 
+const cancelTextProcessing = () => {
+    if (inputProcessTimeout) {
+        clearTimeout(inputProcessTimeout);
+        inputProcessTimeout = null;
+    }
+};
+
+const refreshTagsFromText = (text: string) => {
+    tags.value = enrichTags(textToTags(text));
+};
+
+const scheduleTextProcessing = () => {
+    cancelTextProcessing();
+
+    inputProcessTimeout = setTimeout(() => {
+        inputProcessTimeout = null;
+
+        refreshTagsFromText(localValue.value);
+
+        const el = textareaRef.value;
+        if (!el || document.activeElement !== el) {
+            showAutocomplete.value = false;
+            loading.value = false;
+            return;
+        }
+
+        void checkAutocomplete(el);
+    }, TEXT_PROCESS_DEBOUNCE_MS);
+};
+
 // Initialize tags
 tags.value = enrichTags(textToTags(localValue.value));
 
@@ -114,8 +147,13 @@ const showSearchModal = ref(false);
 // Sync prop to local value (one-way from parent)
 watch(() => props.modelValue, (newValue) => {
     if (newValue !== localValue.value) {
+        cancelTextProcessing();
         localValue.value = newValue;
-        tags.value = enrichTags(textToTags(newValue));
+        refreshTagsFromText(newValue);
+        showAutocomplete.value = false;
+        searchResults.value = [];
+        selectedIndex.value = 0;
+        loading.value = false;
     }
 });
 
@@ -124,12 +162,11 @@ const handleInput = (e: Event) => {
     const target = e.target as HTMLTextAreaElement;
     localValue.value = target.value;
     emit('update:modelValue', target.value);
-    
-    // Update tags from text
-    tags.value = enrichTags(textToTags(target.value));
-
-    // Trigger autocomplete logic
-    checkAutocomplete(target);
+    showAutocomplete.value = false;
+    loading.value = false;
+    searchResults.value = [];
+    selectedIndex.value = 0;
+    scheduleTextProcessing();
 };
 
 
@@ -184,6 +221,8 @@ const stopResize = () => {
 
 // Clean up event listeners just in case
 onUnmounted(() => {
+    cancelTextProcessing();
+    if (fetchTimeout) clearTimeout(fetchTimeout);
     document.removeEventListener('mousemove', doResize);
     document.removeEventListener('mouseup', stopResize);
 });
@@ -200,6 +239,7 @@ const checkAutocomplete = async (el: HTMLTextAreaElement) => {
     
     if (match) {
         const query = match[1];
+        const requestToken = ++autocompleteRequestToken;
         currentQuery.value = query;
         queryStartPos.value = match.index;
         
@@ -218,7 +258,8 @@ const checkAutocomplete = async (el: HTMLTextAreaElement) => {
             console.log(`[Autocomplete] Searching for: "${query}"`);
             const db = DuckDBService.getInstance();
             const results = await db.searchTags(query, 20, settings.useAliasesInAutocomplete);
-            
+
+            if (requestToken !== autocompleteRequestToken) return;
             searchResults.value = results;
             selectedIndex.value = 0;
             
@@ -226,12 +267,21 @@ const checkAutocomplete = async (el: HTMLTextAreaElement) => {
              // if (results.length === 0) showAutocomplete.value = false;
              
         } catch (e) {
-            console.error("Autocomplete search error:", e);
+            if (requestToken === autocompleteRequestToken) {
+                console.error("Autocomplete search error:", e);
+            }
         } finally {
-            loading.value = false;
+            if (requestToken === autocompleteRequestToken) {
+                loading.value = false;
+            }
         }
     } else {
+        autocompleteRequestToken++;
         showAutocomplete.value = false;
+        searchResults.value = [];
+        selectedIndex.value = 0;
+        currentQuery.value = '';
+        loading.value = false;
     }
 };
 
@@ -263,6 +313,7 @@ const handleKeydown = (e: KeyboardEvent) => {
 
 const selectItem = (item: any) => {
     if (!textareaRef.value) return;
+    cancelTextProcessing();
     
     const el = textareaRef.value;
     const cursor = el.selectionEnd;
@@ -306,7 +357,7 @@ const selectItem = (item: any) => {
     emit('update:modelValue', newText);
     
     // Update tags with enrichment
-    tags.value = enrichTags(textToTags(newText));
+    refreshTagsFromText(newText);
     
     showAutocomplete.value = false;
     
@@ -334,6 +385,7 @@ const closeSearchModal = () => {
 
 // Add tag from search
 const handleAddTag = (tagName: string, category: number) => {
+    cancelTextProcessing();
     // Apply text formatting settings
     let formattedTagName = tagName;
     
@@ -377,6 +429,7 @@ const focus = () => {
 
 // Format: ,xxx -> , xxx
 const handleFormat = () => {
+    cancelTextProcessing();
     let newVal = localValue.value;
     // Replace comma followed immediately by non-space with comma space
     // Also trim multiple spaces
@@ -388,7 +441,7 @@ const handleFormat = () => {
     if (newVal !== localValue.value) {
         localValue.value = newVal;
         emit('update:modelValue', newVal);
-        tags.value = enrichTags(textToTags(newVal));
+        refreshTagsFromText(newVal);
     }
 };
 
@@ -468,6 +521,7 @@ const formatGroupedTags = (tagsList: TagItem[]) => {
 
 // Handle updates from VisualTagArea
 const handleTagsUpdate = (newTags: TagItem[]) => {
+    cancelTextProcessing();
     tags.value = newTags;
     // If multiline is already present or we want to maintain the organized structure
     // we use grouped formatting if at least one tag has a category.
@@ -482,6 +536,7 @@ const handleTagsUpdate = (newTags: TagItem[]) => {
 
 // Organize
 const handleOrganize = async () => {
+    cancelTextProcessing();
     const rawTags = textToTags(localValue.value);
     const enriched = enrichTags(rawTags);
     
@@ -538,6 +593,7 @@ const handleOrganize = async () => {
 const handleInsertMeta = (metaWord: string) => {
     const el = textareaRef.value;
     if (!el) return;
+    cancelTextProcessing();
     
     const start = el.selectionStart;
     const end = el.selectionEnd;
@@ -558,7 +614,7 @@ const handleInsertMeta = (metaWord: string) => {
     const newText = text.substring(0, start) + insertText + text.substring(end);
     localValue.value = newText;
     emit('update:modelValue', newText);
-    tags.value = enrichTags(textToTags(newText));
+    refreshTagsFromText(newText);
     
     nextTick(() => {
         el.focus();
