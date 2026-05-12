@@ -40,6 +40,8 @@ export class CategoryService {
         this._categories.set(TagCategory.COPYRIGHT, { value: TagCategory.COPYRIGHT, label: 'Copyright', color: CATEGORY_COLORS[TagCategory.COPYRIGHT] });
         this._categories.set(TagCategory.CHARACTER, { value: TagCategory.CHARACTER, label: 'Character', color: CATEGORY_COLORS[TagCategory.CHARACTER] });
         this._categories.set(TagCategory.META, { value: TagCategory.META, label: 'Meta', color: CATEGORY_COLORS[TagCategory.META] });
+        this._categories.set(TagCategory.SPECIAL, { value: TagCategory.SPECIAL, label: 'Special', color: CATEGORY_COLORS[TagCategory.SPECIAL] });
+        this._categories.set(TagCategory.RATING, { value: TagCategory.RATING, label: 'Rating', color: CATEGORY_COLORS[TagCategory.RATING] });
     }
 
     public async init(): Promise<void> {

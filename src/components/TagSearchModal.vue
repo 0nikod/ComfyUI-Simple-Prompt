@@ -131,12 +131,30 @@ const formatPostCount = (count: number | undefined) => {
   return count?.toLocaleString() || '0';
 };
 
-// Highlight matched text with bold
-const highlightMatch = (text: string, query: string): string => {
-  if (!query || !text) return text;
-  
-  const regex = new RegExp(`(${query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi');
-  return text.replace(regex, '<strong class="match-bold">$1</strong>');
+// Highlight matched text without rendering user-controlled text as HTML.
+const getHighlightParts = (text: string, query: string): Array<{ text: string; match: boolean }> => {
+  if (!query || !text) return [{ text, match: false }];
+
+  const lowerText = text.toLowerCase();
+  const lowerQuery = query.toLowerCase();
+  const parts: Array<{ text: string; match: boolean }> = [];
+  let cursor = 0;
+  let index = lowerText.indexOf(lowerQuery, cursor);
+
+  while (index !== -1) {
+    if (index > cursor) {
+      parts.push({ text: text.slice(cursor, index), match: false });
+    }
+    parts.push({ text: text.slice(index, index + query.length), match: true });
+    cursor = index + query.length;
+    index = lowerText.indexOf(lowerQuery, cursor);
+  }
+
+  if (cursor < text.length) {
+    parts.push({ text: text.slice(cursor), match: false });
+  }
+
+  return parts;
 };
 
 // --- Like Functionality ---
@@ -259,10 +277,28 @@ const toggleLike = async (tag: any, event: Event) => {
                 <div class="tag-name-row">
                   <span class="category-indicator"></span>
                   <span class="tag-name">
-                    <span v-if="!tag.matched_alias" v-html="highlightMatch(tag.name, searchQuery)"></span>
+                    <span v-if="!tag.matched_alias">
+                      <span
+                        v-for="(part, idx) in getHighlightParts(tag.name, searchQuery)"
+                        :key="`name-${tag.name}-${idx}`"
+                        :class="{ 'match-bold': part.match }"
+                      >{{ part.text }}</span>
+                    </span>
                     <template v-else>
-                      <span v-html="highlightMatch(tag.name, searchQuery)"></span>
-                      <span class="alias-indicator" v-html="highlightMatch(tag.matched_alias, searchQuery)"></span>
+                      <span>
+                        <span
+                          v-for="(part, idx) in getHighlightParts(tag.name, searchQuery)"
+                          :key="`name-alias-${tag.name}-${idx}`"
+                          :class="{ 'match-bold': part.match }"
+                        >{{ part.text }}</span>
+                      </span>
+                      <span class="alias-indicator">
+                        <span
+                          v-for="(part, idx) in getHighlightParts(tag.matched_alias, searchQuery)"
+                          :key="`alias-${tag.name}-${idx}`"
+                          :class="{ 'match-bold': part.match }"
+                        >{{ part.text }}</span>
+                      </span>
                     </template>
                   </span>
                 </div>
@@ -299,7 +335,7 @@ const toggleLike = async (tag: any, event: Event) => {
 
 <style scoped>
 /* Match text bold style */
-.tag-name :deep(.match-bold) {
+.match-bold {
   font-weight: 700;
   text-decoration: underline;
   text-decoration-color: #0075db;

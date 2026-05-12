@@ -6,7 +6,9 @@ export enum TagCategory {
     ARTIST = 1,
     COPYRIGHT = 3,
     CHARACTER = 4,
-    META = 5
+    META = 5,
+    SPECIAL = 6,
+    RATING = 7
 }
 
 /**
@@ -27,7 +29,9 @@ export const CATEGORY_COLORS: Record<TagCategory, string> = {
     [TagCategory.ARTIST]: '#c00004',     // Red
     [TagCategory.COPYRIGHT]: '#c000c0',  // Purple
     [TagCategory.CHARACTER]: '#00aa00',  // Green
-    [TagCategory.META]: '#fd9200'        // Orange
+    [TagCategory.META]: '#fd9200',       // Orange
+    [TagCategory.SPECIAL]: '#ffd700',    // Gold
+    [TagCategory.RATING]: '#ff69b4'      // HotPink
 };
 
 /**

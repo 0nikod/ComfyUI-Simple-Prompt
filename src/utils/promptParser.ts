@@ -218,10 +218,7 @@ export function formatGroupedTags(tagsList: TagItem[]): string {
     const rowTexts = [0, 1, 2, 3, 4].map(idx => {
         const rowTags = rows[idx];
         if (rowTags.length === 0) return '';
-        return tagsToText(rowTags).replace(/,$/, ''); // Remove trailing comma from tagsToText result if we want (but usually we want comma between groups?)
-        // tagsToText adds a trailing comma.
-        // If we join by newline, we might want that trailing comma.
-        // Let's keep it.
+        return tagsToText(rowTags);
     });
 
     // Build final output with specific blank line logic

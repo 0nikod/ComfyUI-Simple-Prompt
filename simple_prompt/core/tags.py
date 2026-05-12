@@ -8,7 +8,7 @@ import os
 from typing import Any, Dict, List, Optional
 
 from . import config
-from .database import ensure_parquet_exists, get_db_connection, reinit_duckdb
+from .database import DB_WRITE_LOCK, ensure_parquet_exists, reinit_duckdb
 
 logger = logging.getLogger("SimplePrompt")
 
@@ -216,13 +216,14 @@ def list_tags(conn: Any, source: str, limit: int = 50, offset: int = 0, query: s
             SELECT * FROM read_parquet('{path_sql}') 
             {where_clause}
             ORDER BY post_count DESC, name ASC
-            LIMIT {limit} OFFSET {offset}
+            LIMIT ? OFFSET ?
         """
 
+        data_params = [*params, limit, offset]
         if params:
-            res = conn.execute(sql, params)
+            res = conn.execute(sql, data_params)
         else:
-            res = conn.execute(sql)
+            res = conn.execute(sql, data_params)
 
         cols = [desc[0] for desc in res.description]
         data = [dict(zip(cols, row)) for row in res.fetchall()]
@@ -257,13 +258,14 @@ def delete_tag(conn: Any, name: str, source: str) -> bool:
 
     try:
         # Delete using temp table
-        conn.execute("DROP TABLE IF EXISTS temp_del_tags")
-        conn.execute(f"CREATE TABLE temp_del_tags AS SELECT * FROM read_parquet('{path_sql}')")
-        conn.execute("DELETE FROM temp_del_tags WHERE name = ?", [name])
-        conn.execute(f"COPY temp_del_tags TO '{path_sql}' (FORMAT PARQUET)")
-        conn.execute("DROP TABLE temp_del_tags")
+        with DB_WRITE_LOCK:
+            conn.execute("DROP TABLE IF EXISTS temp_del_tags")
+            conn.execute(f"CREATE TABLE temp_del_tags AS SELECT * FROM read_parquet('{path_sql}')")
+            conn.execute("DELETE FROM temp_del_tags WHERE name = ?", [name])
+            conn.execute(f"COPY temp_del_tags TO '{path_sql}' (FORMAT PARQUET)")
+            conn.execute("DROP TABLE temp_del_tags")
 
-        reinit_duckdb()  # Refresh view
+            reinit_duckdb()  # Refresh view
         return True
     except Exception as e:
         logger.error(f"Delete tag failed: {e}")
@@ -294,35 +296,36 @@ def add_tags(conn: Any, tags_data: List[Dict[str, Any]], source: str = "user") -
 
     try:
         # Create temp table from existing parquet
-        conn.execute("DROP TABLE IF EXISTS temp_edit_tags")
-        conn.execute(f"CREATE TABLE temp_edit_tags AS SELECT * FROM read_parquet('{target_path_sql}')")
+        with DB_WRITE_LOCK:
+            conn.execute("DROP TABLE IF EXISTS temp_edit_tags")
+            conn.execute(f"CREATE TABLE temp_edit_tags AS SELECT * FROM read_parquet('{target_path_sql}')")
 
-        count_added = 0
+            count_added = 0
 
-        for item in tags_data:
-            name = item.get("name")
-            if not name:
-                continue
+            for item in tags_data:
+                name = item.get("name")
+                if not name:
+                    continue
 
-            category = int(item.get("category", 0))
-            post_count = int(item.get("post_count", 0))
-            alias = item.get("alias", [])
+                category = int(item.get("category", 0))
+                post_count = int(item.get("post_count", 0))
+                alias = item.get("alias", [])
 
-            # Delete existing if any (overwrite logic)
-            conn.execute("DELETE FROM temp_edit_tags WHERE name = ?", [name])
+                # Delete existing if any (overwrite logic)
+                conn.execute("DELETE FROM temp_edit_tags WHERE name = ?", [name])
 
-            # Insert new tag
-            conn.execute("INSERT INTO temp_edit_tags VALUES (?, ?, ?, ?)", [name, category, post_count, alias])
-            count_added += 1
+                # Insert new tag
+                conn.execute("INSERT INTO temp_edit_tags VALUES (?, ?, ?, ?)", [name, category, post_count, alias])
+                count_added += 1
 
-        # Write back to parquet
-        conn.execute(f"COPY temp_edit_tags TO '{target_path_sql}' (FORMAT PARQUET)")
-        conn.execute("DROP TABLE temp_edit_tags")
+            # Write back to parquet
+            conn.execute(f"COPY temp_edit_tags TO '{target_path_sql}' (FORMAT PARQUET)")
+            conn.execute("DROP TABLE temp_edit_tags")
 
-        # Refresh Main View
-        reinit_duckdb()
+            # Refresh Main View
+            reinit_duckdb()
 
-        return count_added
+            return count_added
     except Exception as e:
         logger.error(f"Add tags failed: {e}")
         return 0
@@ -357,43 +360,44 @@ def toggle_like_tag(
     liked_path_sql = config.LIKED_TAGS_PATH.replace("\\", "/")
 
     try:
-        conn.execute("DROP TABLE IF EXISTS temp_liked_tags")
-        conn.execute(f"CREATE TABLE temp_liked_tags AS SELECT * FROM read_parquet('{liked_path_sql}')")
+        with DB_WRITE_LOCK:
+            conn.execute("DROP TABLE IF EXISTS temp_liked_tags")
+            conn.execute(f"CREATE TABLE temp_liked_tags AS SELECT * FROM read_parquet('{liked_path_sql}')")
 
-        # Always remove first to avoid duplicates
-        conn.execute("DELETE FROM temp_liked_tags WHERE name = ?", [name])
+            # Always remove first to avoid duplicates
+            conn.execute("DELETE FROM temp_liked_tags WHERE name = ?", [name])
 
-        if should_like:
-            # If data is missing, try to find it in other sources
-            if category is None or post_count is None:
-                for source_path in [config.USER_TAGS_PATH, config.DEFAULT_TAGS_PATH, config.TAGS_PARQUET_PATH]:
-                    if os.path.exists(source_path):
-                        src_sql = source_path.replace("\\", "/")
-                        res = conn.execute(
-                            f"SELECT category, post_count, alias FROM read_parquet('{src_sql}') WHERE name = ?", [name]
-                        ).fetchone()
-                        if res:
-                            category = res[0]
-                            post_count = res[1]
-                            alias = res[2]
-                            break
+            if should_like:
+                # If data is missing, try to find it in other sources
+                if category is None or post_count is None:
+                    for source_path in [config.USER_TAGS_PATH, config.DEFAULT_TAGS_PATH, config.TAGS_PARQUET_PATH]:
+                        if os.path.exists(source_path):
+                            src_sql = source_path.replace("\\", "/")
+                            res = conn.execute(
+                                f"SELECT category, post_count, alias FROM read_parquet('{src_sql}') WHERE name = ?", [name]
+                            ).fetchone()
+                            if res:
+                                category = res[0]
+                                post_count = res[1]
+                                alias = res[2]
+                                break
 
-            # Default values if still missing
-            if category is None:
-                category = 0
-            if post_count is None:
-                post_count = 0
-            if alias is None:
-                alias = []
+                # Default values if still missing
+                if category is None:
+                    category = 0
+                if post_count is None:
+                    post_count = 0
+                if alias is None:
+                    alias = []
 
-            conn.execute("INSERT INTO temp_liked_tags VALUES (?, ?, ?, ?)", [name, category, post_count, alias])
+                conn.execute("INSERT INTO temp_liked_tags VALUES (?, ?, ?, ?)", [name, category, post_count, alias])
 
-        # Write back
-        conn.execute(f"COPY temp_liked_tags TO '{liked_path_sql}' (FORMAT PARQUET)")
-        conn.execute("DROP TABLE temp_liked_tags")
+            # Write back
+            conn.execute(f"COPY temp_liked_tags TO '{liked_path_sql}' (FORMAT PARQUET)")
+            conn.execute("DROP TABLE temp_liked_tags")
 
-        # Refresh View
-        reinit_duckdb()
+            # Refresh View
+            reinit_duckdb()
         return True
     except Exception as e:
         logger.error(f"Toggle like failed: {e}")

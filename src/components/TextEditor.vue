@@ -8,7 +8,7 @@ import AutocompleteList from './AutocompleteList.vue';
 import VisualTagArea from './VisualTagArea.vue';
 import OtherFunctions from './OtherFunctions.vue';
 import TagSearchModal from './TagSearchModal.vue';
-import { textToTags, tagsToText } from '../utils/promptParser';
+import { formatGroupedTags, textToTags, tagsToText } from '../utils/promptParser';
 import type { TagItem } from '../utils/types';
 import { metaService } from '../utils/metaService';
 
@@ -443,80 +443,6 @@ const handleFormat = () => {
         emit('update:modelValue', newVal);
         refreshTagsFromText(newVal);
     }
-};
-
-// Organize
-
-const getSortOrder = (cat: number) => {
-    // Row 0: Special(6)
-    // Row 1: Character(4), Copyright(2,3)
-    // Row 2: Artist(1)
-    // Row 3: General(0)
-    // Row 4: Meta(5), Rating(7)
-    const rowMap: Record<number, number> = {
-        6: 0,
-        4: 1, 2: 1, 3: 1,
-        1: 2,
-        0: 3,
-        5: 4, 7: 4
-    };
-    return rowMap[cat] !== undefined ? rowMap[cat] : 3; // Default to General
-};
-
-const formatGroupedTags = (tagsList: TagItem[]) => {
-    if (tagsList.length === 0) return '';
-    
-    // Group by row
-    const rows: Record<number, TagItem[]> = { 0: [], 1: [], 2: [], 3: [], 4: [] };
-    tagsList.forEach(tag => {
-        const cat = tag.category !== undefined ? tag.category : 0;
-        const rowIndex = getSortOrder(cat);
-        rows[rowIndex].push(tag);
-    });
-    
-    // Sort logic for Row 1 (Characters & Copyrights)
-    // Preference: Character(4) > Copyright(3) > Copyright(2)
-    // Using stable sort by category ID (descending)
-    rows[1].sort((a, b) => {
-        const catA = a.category !== undefined ? a.category : 0;
-        const catB = b.category !== undefined ? b.category : 0;
-        // Descending order: 4 (Character) > 3 (Copyright) > 2 (Copyright)
-        return catB - catA;
-    });
-    
-    // Convert rows to text
-    const rowTexts = [0, 1, 2, 3, 4].map(idx => {
-        const rowTags = rows[idx];
-        if (rowTags.length === 0) return '';
-        return tagsToText(rowTags);
-    });
-    
-    // Build final output with specific blank line logic
-    // Users request:
-    // Row 0
-    // Row 1
-    // Row 2
-    // (blank if General exists)
-    // Row 3 (General)
-    // (blank if Meta/Rating exists)
-    // Row 4
-    
-    let result = '';
-    // Rows 0, 1, 2
-    const topPart = rowTexts.slice(0, 3).filter(t => t).join('\n');
-    if (topPart) result += topPart;
-    
-    // Gap before General
-    if (result && rowTexts[3]) result += '\n\n';
-    
-    if (rowTexts[3]) result += rowTexts[3];
-    
-    // Gap after General
-    if (result && rowTexts[4]) result += '\n\n';
-    
-    if (rowTexts[4]) result += rowTexts[4];
-    
-    return result;
 };
 
 // Handle updates from VisualTagArea
