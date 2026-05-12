@@ -12,6 +12,9 @@ from aiohttp import web
 
 logger = logging.getLogger("SimplePrompt")
 
+MAX_SEARCH_LIMIT = 200
+MAX_LIST_LIMIT = 500
+
 # 检测开发模式
 DEV_MODE = os.environ.get("SIMPLE_PROMPT_DEV", "").lower() in ("1", "true", "yes")
 
@@ -61,6 +64,30 @@ def _get_handlers():
     return handlers
 
 
+def _parse_int_query(request, name: str, default: int, minimum: int = 0, maximum: int | None = None) -> int:
+    raw_value = request.query.get(name, str(default))
+    try:
+        value = int(raw_value)
+    except (TypeError, ValueError):
+        raise ValueError(f"Invalid '{name}' query parameter")
+
+    if value < minimum:
+        raise ValueError(f"'{name}' must be at least {minimum}")
+    if maximum is not None:
+        value = min(value, maximum)
+    return value
+
+
+def _parse_categories(categories_str: str) -> list[int]:
+    if not categories_str:
+        return []
+
+    try:
+        return [int(c) for c in categories_str.split(",") if c.strip()]
+    except ValueError:
+        raise ValueError("Invalid 'categories' query parameter")
+
+
 # --------------------------------------------------------------------------------
 # 路由注册
 # --------------------------------------------------------------------------------
@@ -77,21 +104,16 @@ try:
         """搜索标签"""
         handlers = _get_handlers()
 
-        query = request.query.get("q", "")
-        limit = int(request.query.get("limit", 50))
-        use_aliases = request.query.get("use_aliases", "false").lower() == "true"
-        categories_str = request.query.get("categories", "")
-
-        categories = []
-        if categories_str:
-            try:
-                categories = [int(c) for c in categories_str.split(",") if c.strip()]
-            except ValueError:
-                pass
-
         try:
+            query = request.query.get("q", "")
+            limit = _parse_int_query(request, "limit", 50, minimum=1, maximum=MAX_SEARCH_LIMIT)
+            use_aliases = request.query.get("use_aliases", "false").lower() == "true"
+            categories = _parse_categories(request.query.get("categories", ""))
+
             results = await handlers.handle_search_tags(query, limit, use_aliases, categories)
             return web.json_response(results)
+        except ValueError as e:
+            return web.json_response({"error": str(e)}, status=400)
         except Exception as e:
             logger.error(f"Search API error: {e}")
             return web.json_response({"error": str(e)}, status=500)
@@ -122,12 +144,14 @@ try:
 
         try:
             source = request.query.get("source", "user")
-            limit = int(request.query.get("limit", 50))
-            offset = int(request.query.get("offset", 0))
+            limit = _parse_int_query(request, "limit", 50, minimum=1, maximum=MAX_LIST_LIMIT)
+            offset = _parse_int_query(request, "offset", 0, minimum=0)
             query = request.query.get("q", "")
 
             results = await handlers.handle_list_tags(source, limit, offset, query)
             return web.json_response(results)
+        except ValueError as e:
+            return web.json_response({"error": str(e)}, status=400)
         except Exception as e:
             logger.error(f"Tags list error: {e}")
             return web.json_response({"error": str(e)}, status=500)
@@ -281,6 +305,8 @@ try:
             url = data.get("url")
             result = await handlers.handle_update_tags(url)
             return web.json_response(result)
+        except ValueError as e:
+            return web.json_response({"error": str(e)}, status=400)
         except Exception as e:
             logger.error(f"Update tags error: {e}")
             return web.json_response({"error": str(e)}, status=500)

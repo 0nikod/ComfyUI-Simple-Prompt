@@ -2,7 +2,6 @@ import unittest
 import duckdb
 import tempfile
 import os
-import json
 from simple_prompt.core.tags import search_tags, get_tags_details
 from simple_prompt.core.utils import load_json, save_json
 

@@ -11,7 +11,10 @@ readme = "README.md"
 license = { text = "MIT license" }
 requires-python = ">=3.10"
 classifiers = []
-dependencies = ["duckdb>=1.4.3"]
+dependencies = [
+    "aiohttp>=3.13.5",
+    "duckdb>=1.4.3",
+]
 
 
 [project.optional-dependencies]

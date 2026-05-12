@@ -7,15 +7,23 @@ API 处理器层
 import hashlib
 import logging
 import os
+from urllib.parse import urlparse
 from typing import Any, Dict, List, Optional
 
 from simple_prompt.core import config
-from simple_prompt.core.database import get_db_connection, reinit_duckdb
+from simple_prompt.core.database import DB_WRITE_LOCK, get_db_connection, reinit_duckdb
 from simple_prompt.core import tags as tags_module
 from simple_prompt.core import categories as categories_module
 from simple_prompt.core import presets as presets_module
 
 logger = logging.getLogger("SimplePrompt")
+
+DEFAULT_RELEASE_URL = "https://api.github.com/repos/0nikod/danbooru_tag_process/releases/latest"
+ALLOWED_RELEASE_HOSTS = {"api.github.com"}
+ALLOWED_ASSET_HOSTS = {"github.com", "objects.githubusercontent.com"}
+MAX_TAG_DOWNLOAD_BYTES = 512 * 1024 * 1024
+DOWNLOAD_CHUNK_SIZE = 1024 * 1024
+TAG_ASSET_NAMES = ["tags_processed.parquet", "tags.parquet"]
 
 
 # --------------------------------------------------------------------------------
@@ -283,7 +291,7 @@ async def handle_check_update() -> Dict[str, Any]:
     """
     import aiohttp
 
-    release_url = "https://api.github.com/repos/0nikod/danbooru_tag_process/releases/latest"
+    release_url = DEFAULT_RELEASE_URL
 
     local_sha256 = ""
     if os.path.exists(config.TAGS_PARQUET_PATH):
@@ -296,31 +304,20 @@ async def handle_check_update() -> Dict[str, Any]:
         except Exception as e:
             logger.error(f"Error calculating local SHA256: {e}")
 
-    async with aiohttp.ClientSession() as session:
+    timeout = aiohttp.ClientTimeout(total=30)
+    async with aiohttp.ClientSession(timeout=timeout) as session:
         headers = {"User-Agent": "ComfyUI-Simple-Prompt"}
         async with session.get(release_url, headers=headers) as resp:
             if resp.status != 200:
                 raise RuntimeError(f"Failed to fetch release info: {resp.status}")
             release_info = await resp.json()
 
-        target_asset = None
-        asset_names = ["tags_processed.parquet", "tags.parquet"]
-        for name in asset_names:
-            for asset in release_info.get("assets", []):
-                if asset.get("name") == name:
-                    target_asset = asset
-                    break
-            if target_asset:
-                break
+        target_asset = _find_tag_asset(release_info)
 
         if not target_asset:
             raise RuntimeError("Tag data file not found")
 
-        remote_digest = target_asset.get("digest", "")
-        if remote_digest.startswith("sha256:"):
-            remote_sha256 = remote_digest[7:]
-        else:
-            remote_sha256 = remote_digest
+        remote_sha256 = _extract_remote_sha256(target_asset)
 
         update_available = local_sha256 != remote_sha256
 
@@ -345,44 +342,118 @@ async def handle_update_tags(url: Optional[str] = None) -> Dict[str, str]:
     """
     import aiohttp
 
-    release_url = url or "https://api.github.com/repos/0nikod/danbooru_tag_process/releases/latest"
+    release_url = _validate_release_url(url or DEFAULT_RELEASE_URL)
+    timeout = aiohttp.ClientTimeout(total=300)
 
-    async with aiohttp.ClientSession() as session:
+    async with aiohttp.ClientSession(timeout=timeout) as session:
         headers = {"User-Agent": "ComfyUI-Simple-Prompt"}
         async with session.get(release_url, headers=headers) as resp:
             if resp.status != 200:
                 raise RuntimeError(f"Failed to fetch release info: {resp.status}")
             release_info = await resp.json()
 
-        download_url = None
-        asset_names = ["tags_processed.parquet", "tags.parquet"]
-        for name in asset_names:
-            for asset in release_info.get("assets", []):
-                if asset.get("name") == name:
-                    download_url = asset.get("browser_download_url")
-                    break
-            if download_url:
-                break
+        target_asset = _find_tag_asset(release_info)
+        download_url = target_asset.get("browser_download_url") if target_asset else None
 
         if not download_url:
             raise RuntimeError("Tag data file not found")
 
-        async with session.get(download_url) as resp:
-            if resp.status != 200:
-                raise RuntimeError(f"Failed to download: {resp.status}")
+        remote_sha256 = _extract_remote_sha256(target_asset)
+        temp_path = config.TAGS_PARQUET_PATH + ".tmp"
+        download_url = _validate_asset_url(download_url)
 
-            content = await resp.read()
-            os.makedirs(config.DATA_DIR, exist_ok=True)
-            temp_path = config.TAGS_PARQUET_PATH + ".tmp"
-            with open(temp_path, "wb") as f:
-                f.write(content)
+        try:
+            actual_sha256 = await _download_tag_asset(session, download_url, temp_path)
 
-            if os.path.exists(config.TAGS_PARQUET_PATH):
-                os.remove(config.TAGS_PARQUET_PATH)
-            os.rename(temp_path, config.TAGS_PARQUET_PATH)
+            if remote_sha256 and actual_sha256 != remote_sha256:
+                raise RuntimeError("Downloaded tag data checksum mismatch")
 
-        reinit_duckdb()
+            _validate_parquet_file(temp_path)
+
+            with DB_WRITE_LOCK:
+                os.replace(temp_path, config.TAGS_PARQUET_PATH)
+                reinit_duckdb()
+        finally:
+            if os.path.exists(temp_path):
+                os.remove(temp_path)
+
         return {"status": "success", "message": "Tags updated successfully"}
+
+
+def _find_tag_asset(release_info: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    for name in TAG_ASSET_NAMES:
+        for asset in release_info.get("assets", []):
+            if asset.get("name") == name:
+                return asset
+    return None
+
+
+def _extract_remote_sha256(asset: Dict[str, Any]) -> str:
+    remote_digest = asset.get("digest", "")
+    if remote_digest.startswith("sha256:"):
+        return remote_digest[7:]
+    return remote_digest
+
+
+def _validate_release_url(url: str) -> str:
+    parsed = urlparse(url)
+    if parsed.scheme != "https" or parsed.netloc not in ALLOWED_RELEASE_HOSTS:
+        raise ValueError("Unsupported release URL")
+    if not parsed.path.startswith("/repos/0nikod/danbooru_tag_process/releases/"):
+        raise ValueError("Unsupported release URL")
+    return url
+
+
+def _validate_asset_url(url: str) -> str:
+    parsed = urlparse(url)
+    if parsed.scheme != "https" or parsed.netloc not in ALLOWED_ASSET_HOSTS:
+        raise ValueError("Unsupported asset URL")
+    return url
+
+
+async def _download_tag_asset(session: Any, download_url: str, temp_path: str) -> str:
+    os.makedirs(config.DATA_DIR, exist_ok=True)
+    sha256_hash = hashlib.sha256()
+    total_size = 0
+    headers = {"User-Agent": "ComfyUI-Simple-Prompt"}
+
+    async with session.get(download_url, headers=headers) as resp:
+        if resp.status != 200:
+            raise RuntimeError(f"Failed to download: {resp.status}")
+
+        final_host = urlparse(str(resp.url)).netloc
+        if final_host not in ALLOWED_ASSET_HOSTS:
+            raise ValueError("Unsupported asset redirect URL")
+
+        with open(temp_path, "wb") as f:
+            async for chunk in resp.content.iter_chunked(DOWNLOAD_CHUNK_SIZE):
+                total_size += len(chunk)
+                if total_size > MAX_TAG_DOWNLOAD_BYTES:
+                    raise RuntimeError("Downloaded tag data is too large")
+                sha256_hash.update(chunk)
+                f.write(chunk)
+
+    return sha256_hash.hexdigest()
+
+
+def _validate_parquet_file(path: str) -> None:
+    if os.path.getsize(path) < 8:
+        raise RuntimeError("Downloaded tag data is not a valid parquet file")
+
+    with open(path, "rb") as f:
+        header = f.read(4)
+        f.seek(-4, os.SEEK_END)
+        footer = f.read(4)
+
+    if header != b"PAR1" or footer != b"PAR1":
+        raise RuntimeError("Downloaded tag data is not a valid parquet file")
+
+    conn = get_db_connection()
+    if not conn:
+        raise RuntimeError("Database unavailable")
+
+    path_sql = path.replace("\\", "/")
+    conn.execute(f"SELECT name, category, post_count, alias FROM read_parquet('{path_sql}') LIMIT 0")
 
 
 async def handle_update_data(action: str) -> Dict[str, str]:
@@ -411,51 +482,52 @@ async def handle_update_data(action: str) -> Dict[str, str]:
     ensure_parquet_exists(target_path, config.TAGS_SCHEMA)
     target_path_sql = target_path.replace("\\", "/")
 
-    conn.execute("DROP TABLE IF EXISTS temp_target")
-    conn.execute(f"CREATE TABLE temp_target AS SELECT * FROM read_parquet('{target_path_sql}')")
+    with DB_WRITE_LOCK:
+        conn.execute("DROP TABLE IF EXISTS temp_target")
+        conn.execute(f"CREATE TABLE temp_target AS SELECT * FROM read_parquet('{target_path_sql}')")
 
-    # Build source views
-    other_sources = []
-    if action == "update_liked":
-        if os.path.exists(config.USER_TAGS_PATH):
+        # Build source views
+        other_sources = []
+        if action == "update_liked":
+            if os.path.exists(config.USER_TAGS_PATH):
+                other_sources.append(
+                    f"SELECT name, category, post_count, alias, 2 as p FROM read_parquet('{config.USER_TAGS_PATH.replace(os.sep, '/')}')"
+                )
+        if os.path.exists(config.DEFAULT_TAGS_PATH):
             other_sources.append(
-                f"SELECT name, category, post_count, alias, 2 as p FROM read_parquet('{config.USER_TAGS_PATH.replace(os.sep, '/')}')"
+                f"SELECT name, category, post_count, alias, 3 as p FROM read_parquet('{config.DEFAULT_TAGS_PATH.replace(os.sep, '/')}')"
             )
-    if os.path.exists(config.DEFAULT_TAGS_PATH):
-        other_sources.append(
-            f"SELECT name, category, post_count, alias, 3 as p FROM read_parquet('{config.DEFAULT_TAGS_PATH.replace(os.sep, '/')}')"
-        )
-    if os.path.exists(config.TAGS_PARQUET_PATH):
-        other_sources.append(
-            f"SELECT name, category, post_count, alias, 4 as p FROM read_parquet('{config.TAGS_PARQUET_PATH.replace(os.sep, '/')}')"
-        )
+        if os.path.exists(config.TAGS_PARQUET_PATH):
+            other_sources.append(
+                f"SELECT name, category, post_count, alias, 4 as p FROM read_parquet('{config.TAGS_PARQUET_PATH.replace(os.sep, '/')}')"
+            )
 
-    if other_sources:
-        union_q = " UNION ALL ".join(other_sources)
-        conn.execute(f"CREATE OR REPLACE VIEW others_raw AS {union_q}")
-        conn.execute("""
-            CREATE OR REPLACE VIEW others_best AS 
-            SELECT * EXCLUDE (rn) FROM (
-                SELECT *, ROW_NUMBER() OVER (PARTITION BY name ORDER BY p ASC) as rn FROM others_raw
-            ) WHERE rn = 1
-        """)
+        if other_sources:
+            union_q = " UNION ALL ".join(other_sources)
+            conn.execute(f"CREATE OR REPLACE VIEW others_raw AS {union_q}")
+            conn.execute("""
+                CREATE OR REPLACE VIEW others_best AS
+                SELECT * EXCLUDE (rn) FROM (
+                    SELECT *, ROW_NUMBER() OVER (PARTITION BY name ORDER BY p ASC) as rn FROM others_raw
+                ) WHERE rn = 1
+            """)
 
-        conn.execute("""
-            UPDATE temp_target
-            SET category = others_best.category,
-                post_count = others_best.post_count,
-                alias = others_best.alias
-            FROM others_best
-            WHERE temp_target.name = others_best.name
-        """)
+            conn.execute("""
+                UPDATE temp_target
+                SET category = others_best.category,
+                    post_count = others_best.post_count,
+                    alias = others_best.alias
+                FROM others_best
+                WHERE temp_target.name = others_best.name
+            """)
 
-        conn.execute("DROP VIEW others_best")
-        conn.execute("DROP VIEW others_raw")
+            conn.execute("DROP VIEW others_best")
+            conn.execute("DROP VIEW others_raw")
 
-    conn.execute(f"COPY temp_target TO '{target_path_sql}' (FORMAT PARQUET)")
-    conn.execute("DROP TABLE temp_target")
+        conn.execute(f"COPY temp_target TO '{target_path_sql}' (FORMAT PARQUET)")
+        conn.execute("DROP TABLE temp_target")
 
-    reinit_duckdb()
+        reinit_duckdb()
 
     if action == "update_liked":
         return {"status": "success", "message": "Liked tags data updated from main DB."}
