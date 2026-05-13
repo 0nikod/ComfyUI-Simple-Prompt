@@ -1,0 +1,24 @@
+{
+  "packageManager": "pnpm@11.0.9",
+  "engines": {
+    "node": "^20.19.0 || >=22.12.0"
+  },
+  "peerDependencies": {
+    "primevue": "^4.5.5",
+    "vue": "^3.5.34",
+    "vue-i18n": "^11.4.2"
+  },
+  "devDependencies": {
+    "@comfyorg/comfyui-frontend-types": "^1.45.6",
+    "@vitejs/plugin-vue": "^6.0.6",
+    "vite": "^8.0.12",
+    "vite-plugin-vue-devtools": "^8.1.2"
+  },
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build"
+  },
+  "dependencies": {
+    "@iconify/vue": "^5.0.1"
+  }
+}
