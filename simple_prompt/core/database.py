@@ -6,7 +6,7 @@ DuckDB 数据库管理模块
 import logging
 import os
 import threading
-from typing import Optional, Any
+from typing import Callable, Optional, Any
 
 from . import config
 from .utils import get_sql_path
@@ -143,6 +143,33 @@ def reinit_duckdb() -> None:
     重新初始化数据库（用于数据更新后刷新视图）
     """
     init_duckdb()
+
+
+def rewrite_parquet(conn: Any, path: str, temp_table: str, mutate: Callable[[Any, str], None]) -> None:
+    """
+    Rewrite a parquet file through a temporary DuckDB table.
+
+    Args:
+        conn: DuckDB connection.
+        path: Target parquet path.
+        temp_table: Temporary table name controlled by the caller.
+        mutate: Callback that mutates the temporary table.
+    """
+    path_sql = path.replace("\\", "/")
+
+    with DB_WRITE_LOCK:
+        try:
+            conn.execute(f"DROP TABLE IF EXISTS {temp_table}")
+            conn.execute(f"CREATE TABLE {temp_table} AS SELECT * FROM read_parquet('{path_sql}')")
+            mutate(conn, temp_table)
+            conn.execute(f"COPY {temp_table} TO '{path_sql}' (FORMAT PARQUET)")
+        finally:
+            try:
+                conn.execute(f"DROP TABLE IF EXISTS {temp_table}")
+            except Exception as e:
+                logger.error(f"Failed to drop temporary table {temp_table}: {e}")
+
+        reinit_duckdb()
 
 
 def ensure_parquet_exists(path: str, schema_sql: str) -> None:

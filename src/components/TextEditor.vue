@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, watch, nextTick, computed, onMounted, onUnmounted } from 'vue';
+import { ref, watch, nextTick, onUnmounted } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { DuckDBService } from '../utils/duckdbService';
 import { settings } from '../utils/settings';
@@ -10,7 +10,6 @@ import OtherFunctions from './OtherFunctions.vue';
 import TagSearchModal from './TagSearchModal.vue';
 import { formatGroupedTags, textToTags, tagsToText } from '../utils/promptParser';
 import type { TagItem } from '../utils/types';
-import { metaService } from '../utils/metaService';
 
 const props = defineProps({
   modelValue: {
@@ -318,28 +317,7 @@ const selectItem = (item: any) => {
     const el = textareaRef.value;
     const cursor = el.selectionEnd;
     const text = localValue.value;
-    
-    // Get tag name and apply settings
-    let tagName = item.name;
-    
-    // Cache the category from the selected item
-    if (item.category !== undefined) {
-        categoryCache.value[tagName.toLowerCase()] = item.category;
-        // Also cache alias if matched? 
-    }
-
-    // Apply text formatting settings
-    if (settings.convertUnderscoreToSpace) {
-        tagName = tagName.replace(/_/g, ' ');
-        // If we converted space, we should cache the spaced version too for the parser
-        if (item.category !== undefined) {
-             categoryCache.value[tagName.toLowerCase()] = item.category;
-        }
-    }
-    
-    if (settings.escapeBrackets) {
-        tagName = tagName.replace(/\(/g, '\\(').replace(/\)/g, '\\)');
-    }
+    const tagName = formatTagNameForInsertion(item.name, item.category);
     
     // Replace the query with the selected tag name
     const prefix = text.substring(0, queryStartPos.value);
@@ -374,6 +352,28 @@ const handleBlur = () => {
     }, 200);
 };
 
+const cacheTagCategory = (tagName: string, category?: number) => {
+    if (category !== undefined) {
+        categoryCache.value[tagName.toLowerCase()] = category;
+    }
+};
+
+const formatTagNameForInsertion = (tagName: string, category?: number) => {
+    let formattedTagName = tagName;
+    cacheTagCategory(formattedTagName, category);
+
+    if (settings.convertUnderscoreToSpace) {
+        formattedTagName = formattedTagName.replace(/_/g, ' ');
+        cacheTagCategory(formattedTagName, category);
+    }
+
+    if (settings.escapeBrackets) {
+        formattedTagName = formattedTagName.replace(/\(/g, '\\(').replace(/\)/g, '\\)');
+    }
+
+    return formattedTagName;
+};
+
 // Handle search modal
 const openSearchModal = () => {
     showSearchModal.value = true;
@@ -386,21 +386,7 @@ const closeSearchModal = () => {
 // Add tag from search
 const handleAddTag = (tagName: string, category: number) => {
     cancelTextProcessing();
-    // Apply text formatting settings
-    let formattedTagName = tagName;
-    
-    // Cache the category
-    categoryCache.value[tagName.toLowerCase()] = category;
-    
-    if (settings.convertUnderscoreToSpace) {
-        formattedTagName = formattedTagName.replace(/_/g, ' ');
-        // Cache formatted version too
-        categoryCache.value[formattedTagName.toLowerCase()] = category;
-    }
-    
-    if (settings.escapeBrackets) {
-        formattedTagName = formattedTagName.replace(/\(/g, '\\(').replace(/\)/g, '\\)');
-    }
+    const formattedTagName = formatTagNameForInsertion(tagName, category);
     
     // Create a new tag and add it to the list
     const newTag: TagItem = {
@@ -434,9 +420,6 @@ const handleFormat = () => {
     // Replace comma followed immediately by non-space with comma space
     // Also trim multiple spaces
     newVal = newVal.replace(/,(\S)/g, ', $1');
-    // Maybe normalize spaces around commas?
-    // newVal = newVal.replace(/\s*,\s*/g, ', '); 
-    // Stick to explicit request: ",xxx" -> ", xxx"
     
     if (newVal !== localValue.value) {
         localValue.value = newVal;
@@ -553,61 +536,6 @@ const handleAutoMetaToggle = (val: boolean) => {
     settings.autoMetaEnabled = val;
 };
 
-// Check Auto Meta on Save?
-// Actually, user said: "open time click save automatically add meta word"
-// This implies the PARENT calls save, and we should intercept it?
-// Or we just update the modelValue before emit('update:modelValue')?
-// The parent `App.vue` listens to `save` event from `ModalWrapper`.
-// `ModalWrapper` emits `save` when "Done" or "Save" is clicked.
-// `TextEditor` is inside `ModalWrapper`.
-// `TextEditor` syncs `v-model` (localValue) with Parent's `promptText`.
-// When `App.vue` calls `saveChanges`, it uses `promptText`.
-// So we need to apply Auto Meta to `promptText` whenever it changes? No, too aggressive.
-// "Click save automatically in end add meta word".
-// So when the user clicks "Save" / "Use" in the UI.
-// The UI buttons are in `ModalWrapper`?
-// `App.vue`:
-//   <ModalWrapper @save="saveChanges"> ... </ModalWrapper>
-//   const saveChanges = () => { emit('save', promptText.value); ... }
-// `ModalWrapper` has the buttons.
-// `TextEditor` doesn't control the Save button.
-//
-// Solution:
-// Watch `localValue`? No.
-// Hook into `onUnmounted`? No.
-// Since `TextEditor` updates `modelValue` in real-time (`@input`), parent always has latest text.
-// We need to intercept the Final Save.
-// BUT `TextEditor` doesn't know when Save happens.
-//
-// Maybe `TextEditor` should apply auto-meta continuously? No.
-// Maybe we can export a function `applyAutoMeta()` and `App.vue` calls it?
-// `App.vue` has a ref to `TextEditor`? Content is in slot.
-//
-// Alternative: `TextEditor` applies auto-meta whenever `localValue` changes IF enabled? No, "Click save".
-//
-// Maybe "Auto Meta" switch is just for *insertion*?
-// "Switch, open time click save automatically in end add".
-// This strongly implies "On Save".
-//
-// I can add a watcher on `settings.autoMetaEnabled`? No.
-//
-// I will assume `ModalWrapper` or `App.vue` needs modification?
-// Or `TextEditor` emits a special event or `App.vue` logic needs update.
-// `App.vue`:
-// <TextEditor v-model="promptText" />
-//
-// I can update `App.vue` to check `settings.autoMetaEnabled`.
-// And fetch `metaService.metaTags`.
-// And append them.
-//
-// So `TextEditor` manages the SWITCH (via `OtherFunctions` -> `settings`).
-// `App.vue` performs the logic on Save.
-// This separates concerns nicely.
-//
-// So `TextEditor` does NOT need `handleAutoMetaOnSave` logic.
-// It just updates the setting.
-// New tasks: Update `App.vue` to handle Auto Meta on save.
-
 defineExpose({ focus });
 </script>
 
@@ -625,16 +553,6 @@ defineExpose({ focus });
     </div>
 
     <!-- 2. Text Editor -->
-    <!-- We adjust height using splitPercentage. 
-         Note: We subtract toolbar height roughly or rely on flex if we set flex-basis.
-         But percentage of container is easiest if we treat toolbar as part of the % or separate.
-         Let's try: Editor gets splitPercentage%, Visual gets rest. 
-         But toolbar breaks pure %. 
-         Better: Editor gets `height: calc( ${splitPercentage}% - 45px )` ? No.
-         
-         Let's try flex-grow based on percentage? No.
-         Let's just apply height in % to editor, and flex:1 to visual.
-    -->
     <div class="sp-editor-area" :style="{ height: `calc(${splitPercentage}% - 40px)` }">
         <textarea
             ref="textareaRef"
