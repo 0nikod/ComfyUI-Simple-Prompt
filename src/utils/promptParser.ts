@@ -1,6 +1,14 @@
 import type { TagItem } from './types';
 import { TagCategory } from './types';
 
+interface PromptTagRange {
+    text: string;
+    fullMatch: string;
+    start: number;
+    end: number;
+    weight: number;
+}
+
 /**
  * Parse prompt text into TagItem array
  * Matches (text:weight) format or plain comma-separated text
@@ -270,57 +278,32 @@ export function applyAutoMeta(
 ): string {
     if (!metaTags.length) return text;
 
-    // Normalize for matching (lowercase)
     const metaLower = new Set(metaTags.map(t => t.toLowerCase()));
     const ratingLower = new Set(ratingTagNames.map(t => t.toLowerCase()));
+    const foundTags = parsePromptTagRanges(text);
+    const metaToRemove: PromptTagRange[] = [];
+    const existingMetaWeights = new Map<string, number>();
 
-    // Parse to find tag positions and existing weights
-    // We need to track: { tagText, startIndex, endIndex, weight }
-    interface TagMatch {
-        text: string;
-        fullMatch: string;
-        start: number;
-        end: number;
-        weight: number;
+    for (const tag of foundTags) {
+        const lower = tag.text.toLowerCase();
+        if (metaLower.has(lower)) {
+            metaToRemove.push(tag);
+            existingMetaWeights.set(lower, tag.weight);
+        }
     }
 
-    const foundTags: TagMatch[] = [];
+    const withoutOldMeta = removeTagRanges(text, metaToRemove);
+    const metaBlock = buildMetaBlock(metaTags, existingMetaWeights);
+    const insertIndex = findFirstRatingIndex(withoutOldMeta, ratingTagNames, ratingLower);
 
-    // Regex patterns:
-    // 1. Weighted tag: (text:weight)
-    // 2. Plain tag: text between commas/newlines
-    // We need to carefully find positions.
+    return insertBlock(withoutOldMeta, insertIndex, metaBlock);
+}
 
-    // Split by delimiters but keep track of positions
+function parsePromptTagRanges(text: string): PromptTagRange[] {
+    const foundTags: PromptTagRange[] = [];
     let i = 0;
     let currentStart = 0;
     let currentTag = '';
-
-    const processTag = (tagStr: string, fullMatch: string, start: number, end: number) => {
-        const trimmed = tagStr.trim();
-        if (!trimmed) return;
-
-        // Check for weight syntax: (text:weight)
-        const weightMatch = trimmed.match(/^\((.+):(\d+\.?\d*)\)$/);
-        let tagText = trimmed;
-        let weight = 1.0;
-
-        if (weightMatch) {
-            tagText = weightMatch[1].trim();
-            weight = parseFloat(weightMatch[2]);
-        }
-
-        // Unescape parentheses for matching
-        const unescaped = tagText.replace(/\\([()])/g, '$1');
-
-        foundTags.push({
-            text: unescaped,
-            fullMatch,
-            start,
-            end,
-            weight
-        });
-    };
 
     while (i < text.length) {
         const char = text[i];
@@ -342,8 +325,7 @@ export function applyAutoMeta(
 
             if (depth === 0) {
                 const fullMatch = text.substring(i, j);
-                const content = text.substring(i + 1, j - 1);
-                processTag(fullMatch, fullMatch, i, j);
+                addPromptTagRange(foundTags, fullMatch, fullMatch, i, j);
                 i = j;
                 currentStart = j;
                 currentTag = '';
@@ -361,7 +343,7 @@ export function applyAutoMeta(
         // Handle delimiter
         if (char === ',' || char === '\n') {
             if (currentTag.trim()) {
-                processTag(currentTag.trim(), currentTag, currentStart, i);
+                addPromptTagRange(foundTags, currentTag.trim(), currentTag, currentStart, i);
             }
             i++;
             currentStart = i;
@@ -375,103 +357,93 @@ export function applyAutoMeta(
 
     // Last tag
     if (currentTag.trim()) {
-        processTag(currentTag.trim(), currentTag, currentStart, i);
+        addPromptTagRange(foundTags, currentTag.trim(), currentTag, currentStart, i);
     }
 
-    // Identify which tags are meta and which are rating
-    const metaToRemove: TagMatch[] = [];
-    const existingMetaWeights = new Map<string, number>();
-    let ratingStartIndex = text.length;
+    return foundTags;
+}
 
-    for (const tag of foundTags) {
-        const lower = tag.text.toLowerCase();
+function addPromptTagRange(
+    foundTags: PromptTagRange[],
+    tagStr: string,
+    fullMatch: string,
+    start: number,
+    end: number
+) {
+    const trimmed = tagStr.trim();
+    if (!trimmed) return;
 
-        if (metaLower.has(lower)) {
-            metaToRemove.push(tag);
-            existingMetaWeights.set(lower, tag.weight);
-        }
+    const weightMatch = trimmed.match(/^\((.+):(\d+\.?\d*)\)$/);
+    let tagText = trimmed;
+    let weight = 1.0;
 
-        if (ratingLower.has(lower)) {
-            if (tag.start < ratingStartIndex) {
-                ratingStartIndex = tag.start;
-            }
-        }
+    if (weightMatch) {
+        tagText = weightMatch[1].trim();
+        weight = parseFloat(weightMatch[2]);
     }
 
-    // Build result by removing meta tags
-    // Sort removals by position descending to avoid index shifting
-    const removals = [...metaToRemove].sort((a, b) => b.start - a.start);
+    foundTags.push({
+        text: tagText.replace(/\\([()])/g, '$1'),
+        fullMatch,
+        start,
+        end,
+        weight
+    });
+}
 
+function removeTagRanges(text: string, ranges: PromptTagRange[]): string {
     let result = text;
+    const removals = [...ranges].sort((a, b) => b.start - a.start);
+
     for (const removal of removals) {
-        // Find the actual range to remove (including surrounding comma/space)
         let removeStart = removal.start;
         let removeEnd = removal.end;
 
-        // Look backward for comma/space
         while (removeStart > 0 && /[\s,]/.test(result[removeStart - 1])) {
             removeStart--;
         }
 
-        // Look forward for comma/space (but not newlines - preserve structure)
         while (removeEnd < result.length && result[removeEnd] === ' ') {
             removeEnd++;
         }
         if (removeEnd < result.length && result[removeEnd] === ',') {
             removeEnd++;
-            // Also consume trailing space after comma
             while (removeEnd < result.length && result[removeEnd] === ' ') {
                 removeEnd++;
             }
         }
 
-        // If we're removing from the start of a line, don't leave orphan comma
-        // If there's content before and after, we need a comma
-        const before = result.substring(0, removeStart);
-        const after = result.substring(removeEnd);
-
-        result = before + after;
-
-        // Update ratingStartIndex if needed
-        const removedLength = removeEnd - removeStart;
-        if (ratingStartIndex > removal.start) {
-            ratingStartIndex -= removedLength;
-        }
+        result = result.substring(0, removeStart) + result.substring(removeEnd);
     }
 
-    // Clean up any double commas or trailing commas before newlines
-    result = result.replace(/,\s*,/g, ',');
-    result = result.replace(/,\s*\n/g, ',\n');
-    result = result.replace(/\n\s*,/g, '\n');
+    return result
+        .replace(/,\s*,/g, ',')
+        .replace(/,\s*\n/g, ',\n')
+        .replace(/\n\s*,/g, '\n');
+}
 
-    // Build meta block string
-    const metaBlock = metaTags.map(m => {
+function buildMetaBlock(metaTags: string[], existingMetaWeights: Map<string, number>): string {
+    return metaTags.map(m => {
         const weight = existingMetaWeights.get(m.toLowerCase()) || 1.0;
-        // Escape parens
         const escaped = m.replace(/\(/g, '\\(').replace(/\)/g, '\\)');
         if (weight !== 1.0) {
             return `(${escaped}:${weight.toFixed(1)})`;
         }
         return escaped;
     }).join(', ') + ',';
+}
 
-    // Find insertion point (before rating section, or at end)
-    // We need to recalculate ratingStartIndex in the modified string
-    // Simpler approach: find first rating tag in modified text
-
-    const modifiedTags = textToTags(result);
-    let insertIndex = result.length;
+function findFirstRatingIndex(text: string, ratingTagNames: string[], ratingLower: Set<string>): number {
+    const modifiedTags = textToTags(text);
+    let insertIndex = text.length;
 
     for (let idx = 0; idx < modifiedTags.length; idx++) {
         const lower = modifiedTags[idx].text.toLowerCase();
         if (ratingLower.has(lower)) {
-            // Find this tag's position in result
-            // This is complex... let's use a simpler approach
-            // Find the first occurrence of any rating tag
             for (const ratingName of ratingTagNames) {
-                const escaped = ratingName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                const escaped = escapeRegExp(ratingName);
                 const regex = new RegExp(`(^|[,\\n\\s])${escaped}([,\\n]|$)`, 'i');
-                const match = result.match(regex);
+                const match = text.match(regex);
                 if (match && match.index !== undefined) {
                     const pos = match.index + match[1].length;
                     if (pos < insertIndex) {
@@ -483,17 +455,17 @@ export function applyAutoMeta(
         }
     }
 
-    // Find proper insertion point (before rating, after last content)
-    // If there's content before insert point that doesn't end with newline, add newline
-    let prefix = result.substring(0, insertIndex).trimEnd();
-    let suffix = result.substring(insertIndex);
+    return insertIndex;
+}
 
-    // Ensure proper separation
+function insertBlock(text: string, insertIndex: number, block: string): string {
+    let prefix = text.substring(0, insertIndex).trimEnd();
+    let suffix = text.substring(insertIndex);
+
     if (prefix && !prefix.endsWith(',') && !prefix.endsWith('\n')) {
         prefix += ',';
     }
 
-    // Add newlines for separation if needed
     if (prefix && !prefix.endsWith('\n\n')) {
         if (prefix.endsWith('\n')) {
             prefix += '\n';
@@ -506,5 +478,9 @@ export function applyAutoMeta(
         suffix = '\n\n' + suffix.trimStart();
     }
 
-    return prefix + metaBlock + suffix;
+    return prefix + block + suffix;
+}
+
+function escapeRegExp(value: string): string {
+    return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }

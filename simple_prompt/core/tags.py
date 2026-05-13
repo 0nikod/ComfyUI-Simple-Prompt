@@ -8,7 +8,7 @@ import os
 from typing import Any, Dict, List, Optional
 
 from . import config
-from .database import DB_WRITE_LOCK, ensure_parquet_exists, reinit_duckdb
+from .database import ensure_parquet_exists, rewrite_parquet
 
 logger = logging.getLogger("SimplePrompt")
 
@@ -254,18 +254,12 @@ def delete_tag(conn: Any, name: str, source: str) -> bool:
         return False
 
     ensure_parquet_exists(path, config.TAGS_SCHEMA)
-    path_sql = path.replace("\\", "/")
 
     try:
-        # Delete using temp table
-        with DB_WRITE_LOCK:
-            conn.execute("DROP TABLE IF EXISTS temp_del_tags")
-            conn.execute(f"CREATE TABLE temp_del_tags AS SELECT * FROM read_parquet('{path_sql}')")
-            conn.execute("DELETE FROM temp_del_tags WHERE name = ?", [name])
-            conn.execute(f"COPY temp_del_tags TO '{path_sql}' (FORMAT PARQUET)")
-            conn.execute("DROP TABLE temp_del_tags")
+        def remove_tag(edit_conn: Any, table_name: str) -> None:
+            edit_conn.execute(f"DELETE FROM {table_name} WHERE name = ?", [name])
 
-            reinit_duckdb()  # Refresh view
+        rewrite_parquet(conn, path, "temp_del_tags", remove_tag)
         return True
     except Exception as e:
         logger.error(f"Delete tag failed: {e}")
@@ -292,16 +286,12 @@ def add_tags(conn: Any, tags_data: List[Dict[str, Any]], source: str = "user") -
         return 0
 
     ensure_parquet_exists(target_path, config.TAGS_SCHEMA)
-    target_path_sql = target_path.replace("\\", "/")
 
     try:
-        # Create temp table from existing parquet
-        with DB_WRITE_LOCK:
-            conn.execute("DROP TABLE IF EXISTS temp_edit_tags")
-            conn.execute(f"CREATE TABLE temp_edit_tags AS SELECT * FROM read_parquet('{target_path_sql}')")
+        count_added = 0
 
-            count_added = 0
-
+        def upsert_tags(edit_conn: Any, table_name: str) -> None:
+            nonlocal count_added
             for item in tags_data:
                 name = item.get("name")
                 if not name:
@@ -311,21 +301,12 @@ def add_tags(conn: Any, tags_data: List[Dict[str, Any]], source: str = "user") -
                 post_count = int(item.get("post_count", 0))
                 alias = item.get("alias", [])
 
-                # Delete existing if any (overwrite logic)
-                conn.execute("DELETE FROM temp_edit_tags WHERE name = ?", [name])
-
-                # Insert new tag
-                conn.execute("INSERT INTO temp_edit_tags VALUES (?, ?, ?, ?)", [name, category, post_count, alias])
+                edit_conn.execute(f"DELETE FROM {table_name} WHERE name = ?", [name])
+                edit_conn.execute(f"INSERT INTO {table_name} VALUES (?, ?, ?, ?)", [name, category, post_count, alias])
                 count_added += 1
 
-            # Write back to parquet
-            conn.execute(f"COPY temp_edit_tags TO '{target_path_sql}' (FORMAT PARQUET)")
-            conn.execute("DROP TABLE temp_edit_tags")
-
-            # Refresh Main View
-            reinit_duckdb()
-
-            return count_added
+        rewrite_parquet(conn, target_path, "temp_edit_tags", upsert_tags)
+        return count_added
     except Exception as e:
         logger.error(f"Add tags failed: {e}")
         return 0
@@ -357,15 +338,11 @@ def toggle_like_tag(
         return False
 
     ensure_parquet_exists(config.LIKED_TAGS_PATH, config.TAGS_SCHEMA)
-    liked_path_sql = config.LIKED_TAGS_PATH.replace("\\", "/")
 
     try:
-        with DB_WRITE_LOCK:
-            conn.execute("DROP TABLE IF EXISTS temp_liked_tags")
-            conn.execute(f"CREATE TABLE temp_liked_tags AS SELECT * FROM read_parquet('{liked_path_sql}')")
-
-            # Always remove first to avoid duplicates
-            conn.execute("DELETE FROM temp_liked_tags WHERE name = ?", [name])
+        def update_liked(edit_conn: Any, table_name: str) -> None:
+            nonlocal category, post_count, alias
+            edit_conn.execute(f"DELETE FROM {table_name} WHERE name = ?", [name])
 
             if should_like:
                 # If data is missing, try to find it in other sources
@@ -373,7 +350,7 @@ def toggle_like_tag(
                     for source_path in [config.USER_TAGS_PATH, config.DEFAULT_TAGS_PATH, config.TAGS_PARQUET_PATH]:
                         if os.path.exists(source_path):
                             src_sql = source_path.replace("\\", "/")
-                            res = conn.execute(
+                            res = edit_conn.execute(
                                 f"SELECT category, post_count, alias FROM read_parquet('{src_sql}') WHERE name = ?", [name]
                             ).fetchone()
                             if res:
@@ -390,14 +367,9 @@ def toggle_like_tag(
                 if alias is None:
                     alias = []
 
-                conn.execute("INSERT INTO temp_liked_tags VALUES (?, ?, ?, ?)", [name, category, post_count, alias])
+                edit_conn.execute(f"INSERT INTO {table_name} VALUES (?, ?, ?, ?)", [name, category, post_count, alias])
 
-            # Write back
-            conn.execute(f"COPY temp_liked_tags TO '{liked_path_sql}' (FORMAT PARQUET)")
-            conn.execute("DROP TABLE temp_liked_tags")
-
-            # Refresh View
-            reinit_duckdb()
+        rewrite_parquet(conn, config.LIKED_TAGS_PATH, "temp_liked_tags", update_liked)
         return True
     except Exception as e:
         logger.error(f"Toggle like failed: {e}")
