@@ -4,9 +4,11 @@ import { useI18n } from 'vue-i18n';
 import { Icon } from '@iconify/vue';
 import { settings } from '../utils/settings';
 import TagManager from './TagManager.vue';
-import { categoryService, type CategoryItem } from '../utils/categoryService';
+import { categoryService } from '../utils/categoryService';
 import { metaService } from '../utils/metaService';
+import { useCategoryManagement } from '../composables/useCategoryManagement';
 import { useDataUpdateActions } from '../composables/useDataUpdateActions';
+import { useMetaPresetManagement } from '../composables/useMetaPresetManagement';
 
 const props = defineProps({
   visible: {
@@ -41,114 +43,25 @@ const categories = [
 
 const activeCategory = ref('textFormat');
 
-// Category Management Logic
-const newCatName = ref('');
-const newCatColor = ref('#aabbcc');
-
-const handleAddCategory = () => {
-    if (!newCatName.value) return;
-    
-    const cats = categoryService.categories.value;
-    const maxId = cats.length > 0 ? Math.max(...cats.map(c => c.id)) : 5;
-    let nextId = maxId + 1;
-    if (nextId < 6) nextId = 6;
-    
-    while (cats.some(c => c.id === nextId)) {
-        nextId++;
-    }
-    
-    const newCat: CategoryItem = {
-        id: nextId,
-        name: newCatName.value,
-        color: newCatColor.value
-    };
-    
-    const knownDefaultIds = [0, 1, 3, 4, 5, 6, 7];
-    const customs = [...cats.filter(c => !knownDefaultIds.includes(c.id)), newCat];
-    
-    categoryService.saveCustomCategories(customs).then(() => {
-        newCatName.value = '';
-    });
-};
-
-const handleDeleteCategory = (id: number) => {
-    if (!confirm(t('common.confirm') || 'Are you sure?')) return;
-    const cats = categoryService.categories.value;
-    const knownDefaultIds = [0, 1, 3, 4, 5, 6, 7];
-    if (knownDefaultIds.includes(id)) {
-        alert(t('category.cannotDeleteDefault'));
-        return;
-    }
-    
-    const customs = cats.filter(c => !knownDefaultIds.includes(c.id) && c.id !== id);
-    categoryService.saveCustomCategories(customs);
-};
-
-// Meta Preset Management Logic
-const presetName = ref('');
-const presetTags = ref(''); // string, comma separated
-const editingPresetId = ref<string | null>(null);
+const { newCatName, newCatColor, fetchCategories, handleAddCategory, handleDeleteCategory } = useCategoryManagement(t);
+const {
+    presetName,
+    presetTags,
+    editingPresetId,
+    fetchPresets,
+    resetPresetForm,
+    handleSavePreset,
+    handleEditPreset,
+    handleDeletePreset,
+} = useMetaPresetManagement(t);
 
 watch(activeCategory, (newVal) => {
     if (newVal === 'categoryManager') {
-        categoryService.fetchCategories();
+        fetchCategories();
     } else if (newVal === 'metaManager') {
-        metaService.fetchPresets();
+        fetchPresets();
     }
 });
-
-const handleSavePreset = () => {
-    if (!presetName.value || !presetTags.value) {
-        alert(t('category.nameRequired'));
-        return;
-    }
-    
-    // Parse tags: comma/newline
-    const tags = presetTags.value.split(/[,\n]/).map(s => s.trim()).filter(Boolean);
-    
-    if (editingPresetId.value) {
-        // Update existing
-        const index = metaService.customPresets.value.findIndex(p => p.id === editingPresetId.value);
-        if (index !== -1) {
-            metaService.customPresets.value[index] = {
-                ...metaService.customPresets.value[index],
-                name: presetName.value,
-                tags: tags
-            };
-        }
-    } else {
-        // Create new
-        const newPreset = {
-            id: 'custom_' + Date.now(),
-            name: presetName.value,
-            tags: tags
-        };
-        metaService.customPresets.value.push(newPreset);
-    }
-    
-    metaService.saveCustomPresets(metaService.customPresets.value).then(() => {
-        resetPresetForm();
-    });
-};
-
-const handleEditPreset = (preset: any) => {
-    editingPresetId.value = preset.id;
-    presetName.value = preset.name;
-    presetTags.value = preset.tags.join(', ');
-};
-
-const handleDeletePreset = (id: string) => {
-   if (!confirm(t('common.confirm') || 'Are you sure?')) return;
-   const newCustoms = metaService.customPresets.value.filter(p => p.id !== id);
-   metaService.customPresets.value = newCustoms;
-   metaService.saveCustomPresets(newCustoms);
-};
-
-const resetPresetForm = () => {
-    presetName.value = '';
-    presetTags.value = '';
-    editingPresetId.value = null;
-};
 
 const { updateStatus, isUpdating, isChecking, latestVersion, resetUpdateStatus, handleDataUpdate } = useDataUpdateActions(t);
 
