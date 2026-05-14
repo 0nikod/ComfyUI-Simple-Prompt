@@ -10,6 +10,7 @@ import OtherFunctions from './OtherFunctions.vue';
 import TagSearchModal from './TagSearchModal.vue';
 import { formatGroupedTags, textToTags, tagsToText } from '../utils/promptParser';
 import type { TagItem } from '../utils/types';
+import { useTagCategoryEnrichment } from '../composables/useTagCategoryEnrichment';
 
 const props = defineProps({
   modelValue: {
@@ -32,71 +33,11 @@ const tags = ref<TagItem[]>([]);
 const splitPercentage = ref(60); 
 const isResizing = ref(false);
 
-// Category Caching & Fetching
-const categoryCache = ref<Record<string, number>>({});
-const fetchQueue = new Set<string>();
-let fetchTimeout: any = null;
 const TEXT_PROCESS_DEBOUNCE_MS = 300;
 let inputProcessTimeout: ReturnType<typeof setTimeout> | null = null;
 let autocompleteRequestToken = 0;
 
-const scheduleFetch = () => {
-    if (fetchTimeout) clearTimeout(fetchTimeout);
-    fetchTimeout = setTimeout(async () => {
-        const names = Array.from(fetchQueue);
-        fetchQueue.clear();
-        
-        if (names.length === 0) return;
-        
-        try {
-            const db = DuckDBService.getInstance();
-            const results = await db.getTagsDetails(names);
-            
-            // Update cache with found results
-            Object.entries(results).forEach(([name, cat]) => {
-                 categoryCache.value[name.toLowerCase()] = cat; 
-            });
-            
-            // Mark not found tags as General to prevent re-fetching
-            names.forEach(name => {
-                const lower = name.toLowerCase();
-                if (categoryCache.value[lower] === undefined) {
-                    categoryCache.value[lower] = 0; // General
-                }
-            });
-            
-            // Re-apply to current tags
-            // We create a new array to ensure reactivity triggers in VisualTagArea
-            tags.value = tags.value.map(tag => {
-                 const lower = tag.text.toLowerCase();
-                 if (categoryCache.value[lower] !== undefined) {
-                     return { ...tag, category: categoryCache.value[lower] };
-                 }
-                 return tag;
-            });
-        } catch (e) {
-            console.error("Error fetching tag categories:", e);
-        }
-    }, 1000); // 1s debounce to avoid spamming while typing
-};
-
-const enrichTags = (rawTags: TagItem[]) => {
-    rawTags.forEach(tag => {
-        const lowerText = tag.text.toLowerCase();
-        if (categoryCache.value[lowerText] !== undefined) {
-             tag.category = categoryCache.value[lowerText];
-        } else {
-             // Only fetch if not already scheduled? Set de-dupes.
-             fetchQueue.add(tag.text);
-        }
-    });
-    
-    if (fetchQueue.size > 0) {
-        scheduleFetch();
-    }
-    
-    return rawTags;
-};
+const { cacheTagCategory, enrichTags, enrichTagsNow, stop: stopCategoryEnrichment } = useTagCategoryEnrichment(tags);
 
 const cancelTextProcessing = () => {
     if (inputProcessTimeout) {
@@ -221,7 +162,7 @@ const stopResize = () => {
 // Clean up event listeners just in case
 onUnmounted(() => {
     cancelTextProcessing();
-    if (fetchTimeout) clearTimeout(fetchTimeout);
+    stopCategoryEnrichment();
     document.removeEventListener('mousemove', doResize);
     document.removeEventListener('mouseup', stopResize);
 });
@@ -352,12 +293,6 @@ const handleBlur = () => {
     }, 200);
 };
 
-const cacheTagCategory = (tagName: string, category?: number) => {
-    if (category !== undefined) {
-        categoryCache.value[tagName.toLowerCase()] = category;
-    }
-};
-
 const formatTagNameForInsertion = (tagName: string, category?: number) => {
     let formattedTagName = tagName;
     cacheTagCategory(formattedTagName, category);
@@ -447,43 +382,7 @@ const handleTagsUpdate = (newTags: TagItem[]) => {
 const handleOrganize = async () => {
     cancelTextProcessing();
     const rawTags = textToTags(localValue.value);
-    const enriched = enrichTags(rawTags);
-    
-    // Wait for category fetch to complete if needed
-    if (fetchQueue.size > 0) {
-        // Clear existing timeout and fetch immediately
-        if (fetchTimeout) clearTimeout(fetchTimeout);
-        const names = Array.from(fetchQueue);
-        fetchQueue.clear();
-        
-        try {
-            const db = DuckDBService.getInstance();
-            const results = await db.getTagsDetails(names);
-            
-            // Update cache
-            Object.entries(results).forEach(([name, cat]) => {
-                categoryCache.value[name.toLowerCase()] = cat;
-            });
-            
-            // Mark not found tags as General
-            names.forEach(name => {
-                const lower = name.toLowerCase();
-                if (categoryCache.value[lower] === undefined) {
-                    categoryCache.value[lower] = 0;
-                }
-            });
-            
-            // Re-enrich with updated cache
-            enriched.forEach(tag => {
-                const lower = tag.text.toLowerCase();
-                if (categoryCache.value[lower] !== undefined) {
-                    tag.category = categoryCache.value[lower];
-                }
-            });
-        } catch (e) {
-            console.error("Error fetching tag categories during organize:", e);
-        }
-    }
+    const enriched = await enrichTagsNow(rawTags);
     
     const newText = formatGroupedTags(enriched);
     
