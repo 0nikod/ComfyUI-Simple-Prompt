@@ -22,7 +22,7 @@ const ext = {
         // import.meta.url points to js/main.js
         // css is in js/assets/main.css
         // relative path: ./assets/main.css
-        link.href = new URL("./assets/main.css", import.meta.url).href;
+        link.href = new URL(/* @vite-ignore */ "./assets/main.css", import.meta.url).href;
         document.head.appendChild(link);
     },
 

@@ -1,4 +1,4 @@
-name: Build frontend and publish to Comfy registry
+name: Validate and publish to Comfy registry
 
 on:
   push:
@@ -36,8 +36,20 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Typecheck frontend
+        run: pnpm run typecheck
+
       - name: Build
         run: pnpm run build
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Run backend lint
+        run: uv run --extra dev ruff check simple_prompt tests
+
+      - name: Run backend tests
+        run: uv run --extra dev pytest tests/ -v
 
       - name: Publish Custom Node
         if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
