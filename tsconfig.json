@@ -1,9 +1,13 @@
 {
   "compilerOptions": {
     "target": "ES2022",
+    "lib": ["ESNext", "DOM", "DOM.Iterable"],
     "useDefineForClassFields": true,
     "module": "ESNext",
+    "moduleResolution": "Bundler",
     "resolveJsonModule": true,
+    "skipLibCheck": true,
+    "types": ["node"],
     "paths": {
       "@/*": [
         "./src/*"

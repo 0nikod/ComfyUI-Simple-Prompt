@@ -68,6 +68,7 @@ const onDragEnter = (index: number) => {
         
         // Swap in local state
         const item = localTags.value[fromIndex];
+        if (!item) return;
         // Remove from old pos
         const newTags = [...localTags.value];
         newTags.splice(fromIndex, 1);

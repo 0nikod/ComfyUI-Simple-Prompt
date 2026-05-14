@@ -52,8 +52,9 @@ const handleDelete = async (tag: TagRecord) => {
     try {
         await simplePromptApi.deleteTag(tag.name, activeTab.value);
         fetchTags();
-    } catch (e: any) {
-        alert('Delete failed: ' + e.message);
+    } catch (e: unknown) {
+        const message = e instanceof Error ? e.message : String(e);
+        alert('Delete failed: ' + message);
     }
 };
 
@@ -116,8 +117,9 @@ const handleInlineAdd = async () => {
         newTagName.value = '';
         fetchTags();
         // Show toast or alert? Just clean input is standard.
-    } catch (e: any) {
-        alert('Add failed: ' + e.message);
+    } catch (e: unknown) {
+        const message = e instanceof Error ? e.message : String(e);
+        alert('Add failed: ' + message);
     } finally {
         isAddingKey.value = false;
     }
@@ -266,7 +268,7 @@ const getCategoryColor = (catId: number) => {
         <CustomTagModal 
             :visible="showEditModal"
             :edit-mode="true"
-            :initial-data="editingTag"
+            :initial-data="editingTag || undefined"
             :target-source="activeTab"
             @close="showEditModal = false"
             @save="handleModalSave"

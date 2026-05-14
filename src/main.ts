@@ -1,5 +1,6 @@
+// ComfyUI provides this runtime module from the parent application.
+// @ts-expect-error external ComfyUI runtime import
 import { app } from "../../../scripts/app.js";
-import { api } from "../../../scripts/api.js";
 
 /**
  * SimplePrompt Frontend Extension
@@ -10,7 +11,7 @@ import { api } from "../../../scripts/api.js";
 const ext = {
     name: "SimplePrompt.Editor",
 
-    async init(app) {
+    async init(app: ComfyAppLike) {
         console.log("[SimplePrompt] Extension initialized");
 
         // Load CSS
@@ -25,7 +26,7 @@ const ext = {
         document.head.appendChild(link);
     },
 
-    async nodeCreated(node, app) {
+    async nodeCreated(node: ComfyNodeLike, app: ComfyAppLike) {
         // Only target the SimplePrompt node
         if (node.comfyClass === "SimplePrompt") {
             try {
@@ -36,25 +37,25 @@ const ext = {
         }
     },
 
-    setupSimplePromptNode(node, app) {
+    setupSimplePromptNode(node: ComfyNodeLike, app: ComfyAppLike) {
         // Add "Edit Prompt" button
         // We use a custom widget name to identify it easily later
-        const editWidget = node.addWidget("button", "Edit Prompt", null, () => {
+        node.addWidget("button", "Edit Prompt", null, () => {
             this.openEditorModal(node);
         });
 
         // Ensure prompt_text widget exists and is accessible
-        const promptWidget = node.widgets.find(w => w.name === "prompt_text");
+        const promptWidget = node.widgets.find((w) => w.name === "prompt_text");
         if (!promptWidget) {
             console.warn("[SimplePrompt] prompt_text widget not found!");
         }
     },
 
-    openEditorModal(node) {
+    openEditorModal(node: ComfyNodeLike) {
         console.log("[SimplePrompt] Opening editor for node:", node.id);
 
         // Get current prompt text
-        const promptWidget = node.widgets.find(w => w.name === "prompt_text");
+        const promptWidget = node.widgets.find((w) => w.name === "prompt_text");
         const currentPrompt = promptWidget ? promptWidget.value : "";
 
         // Create container
@@ -69,7 +70,7 @@ const ext = {
 
                 const appInstance = createApp(App, {
                     initialPrompt: currentPrompt,
-                    onSave: (newPrompt) => {
+                    onSave: (newPrompt: string) => {
                         if (promptWidget) {
                             promptWidget.value = newPrompt;
                         }

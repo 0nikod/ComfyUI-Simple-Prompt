@@ -4,9 +4,10 @@ import { useI18n } from 'vue-i18n';
 import { settings } from '../utils/settings';
 import { CategoryService } from '../utils/categoryService';
 import { Icon } from '@iconify/vue';
+import type { TagItem as TagItemType } from '../utils/types';
 
 const props = defineProps<{
-  tag: TagItem;
+  tag: TagItemType;
 }>();
 
 const emit = defineEmits<{

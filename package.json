@@ -10,13 +10,17 @@
   },
   "devDependencies": {
     "@comfyorg/comfyui-frontend-types": "^1.45.6",
+    "@types/node": "^25.7.0",
     "@vitejs/plugin-vue": "^6.0.6",
+    "typescript": "^5.9.3",
     "vite": "^8.0.12",
-    "vite-plugin-vue-devtools": "^8.1.2"
+    "vite-plugin-vue-devtools": "^8.1.2",
+    "vue-tsc": "^3.2.8"
   },
   "scripts": {
     "dev": "vite",
-    "build": "vite build"
+    "build": "vite build",
+    "typecheck": "vue-tsc --noEmit"
   },
   "dependencies": {
     "@iconify/vue": "^5.0.1"

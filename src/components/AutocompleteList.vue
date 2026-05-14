@@ -3,20 +3,21 @@ import { computed } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { CategoryService } from '../utils/categoryService';
 import { Icon } from '@iconify/vue';
+import type { TagRecord } from '../api/types';
 
 const props = defineProps<{
-  items: any[];
+  items: TagRecord[];
   selectedIndex: number;
   loading?: boolean;
 }>();
 
 const emit = defineEmits<{
-  select: [item: any];
+  select: [item: TagRecord];
 }>();
 
 const { t } = useI18n();
 
-const handleSelect = (item: any) => {
+const handleSelect = (item: TagRecord) => {
   emit('select', item);
 };
 
@@ -59,7 +60,7 @@ const formatCount = (count: number | bigint) => {
             :style="{ backgroundColor: getCategoryColor(item.category) }"
           ></div>
           <span class="item-name">{{ item.name }}</span>
-          <span v-if="item.alias_match" class="item-alias">({{ item.alias_match }})</span>
+          <span v-if="item.matched_alias" class="item-alias">({{ item.matched_alias }})</span>
         </div>
         
         <div class="item-right">

@@ -1,10 +1,9 @@
 <script setup lang="ts">
-import { ref, watch, onMounted } from 'vue';
+import { ref, onMounted } from 'vue';
 import ModalWrapper from './components/ModalWrapper.vue';
 import TextEditor from './components/TextEditor.vue';
-import { textToTags, tagsToText } from './utils/promptParser';
-import type { TagItem } from './utils/types';
 import { DuckDBService } from './utils/duckdbService';
+import { useI18n } from 'vue-i18n';
 
 const showModal = ref(false);
 const promptText = ref('1girl, solo, (masterpiece:1.2), best quality');
@@ -46,8 +45,6 @@ const saveChanges = () => {
     closeModal();
 };
 
-const { locale } = DuckDBService.getInstance() as any; // Mock logic or use i18n
-import { useI18n } from 'vue-i18n';
 const { locale: i18nLocale } = useI18n();
 
 const toggleLanguage = () => {

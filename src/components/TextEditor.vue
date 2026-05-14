@@ -11,6 +11,7 @@ import TagSearchModal from './TagSearchModal.vue';
 import { formatGroupedTags, textToTags, tagsToText } from '../utils/promptParser';
 import type { TagItem } from '../utils/types';
 import { useTagCategoryEnrichment } from '../composables/useTagCategoryEnrichment';
+import type { TagRecord } from '../api/types';
 
 const props = defineProps({
   modelValue: {
@@ -74,7 +75,7 @@ tags.value = enrichTags(textToTags(localValue.value));
 
 // Autocomplete State
 const showAutocomplete = ref(false);
-const searchResults = ref<any[]>([]);
+const searchResults = ref<TagRecord[]>([]);
 const selectedIndex = ref(0);
 const menuPosition = ref({ top: 0, left: 0 });
 const currentQuery = ref('');
@@ -251,7 +252,7 @@ const handleKeydown = (e: KeyboardEvent) => {
     }
 };
 
-const selectItem = (item: any) => {
+const selectItem = (item: TagRecord) => {
     if (!textareaRef.value) return;
     cancelTextProcessing();
     

@@ -5,11 +5,12 @@ import { Icon } from '@iconify/vue';
 import { categoryService } from '../utils/categoryService';
 import { TagCategory } from '../utils/types';
 import { simplePromptApi } from '../api/client';
+import type { TagRecord } from '../api/types';
 
 const props = defineProps<{
   visible: boolean;
   editMode?: boolean;
-  initialData?: any;
+  initialData?: TagRecord;
   targetSource?: string;
 }>();
 
@@ -95,9 +96,9 @@ const handleSave = async () => {
         handleClose();
     }, 1000);
 
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Add tag error:', error);
-    errorMsg.value = error.message || t('customTag.errorGeneric');
+    errorMsg.value = error instanceof Error ? error.message : t('customTag.errorGeneric');
   } finally {
     isSubmitting.value = false;
   }

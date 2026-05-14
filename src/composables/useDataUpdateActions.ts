@@ -59,9 +59,10 @@ export function useDataUpdateActions(t: Translate) {
                     throw new Error(result.message || 'Update failed');
                 }
             }
-        } catch (error: any) {
+        } catch (error: unknown) {
             console.error('Update action error:', error);
-            updateStatus.value = t('settings.items.updateError') + error.message;
+            const message = error instanceof Error ? error.message : String(error);
+            updateStatus.value = t('settings.items.updateError') + message;
         } finally {
             isUpdating.value = false;
         }

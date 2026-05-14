@@ -13,15 +13,15 @@ import AppDev from './App.dev.vue';
 console.log("[Dev] Initializing Standalone Development Environment");
 
 // Mock Global Variables commonly found in ComfyUI
-(window as any).app = {
+window.app = {
     ui: {
         settings: {
-            getSettingValue: (key: string, def: any) => {
+            getSettingValue: <T,>(key: string, def: T): T => {
                 console.log(`[Dev] getSettingValue: ${key}`, def);
                 // Return mock settings from localStorage or default
                 return JSON.parse(localStorage.getItem(key) || JSON.stringify(def));
             },
-            setSettingValue: (key: string, val: any) => {
+            setSettingValue: <T,>(key: string, val: T) => {
                 console.log(`[Dev] setSettingValue: ${key}`, val);
                 localStorage.setItem(key, JSON.stringify(val));
             }
@@ -29,7 +29,7 @@ console.log("[Dev] Initializing Standalone Development Environment");
     }
 };
 
-(window as any).api = {
+window.api = {
     apiURL: '/api' // Proxy to backend if needed
 };
 
@@ -44,7 +44,7 @@ const mockNode = {
             callback: (v: string) => { console.log("[Dev] Widget Value Changed:", v); }
         }
     ],
-    addWidget: (type: string, name: string, value: any, callback: any) => {
+    addWidget: (type: string, name: string, value: unknown, callback: () => void) => {
         console.log(`[Dev] addWidget: ${type}, ${name}`);
         if (type === 'button') {
             // Simulate button click to open editor immediately for debugging
@@ -77,16 +77,16 @@ async function initDev() {
 
     // Import main logic to trigger registration (but we need to mock app.registerExtension)
     const mockApp = {
-        registerExtension: (ext: any) => {
+        registerExtension: (ext: ComfyExtensionLike) => {
             console.log(`[Dev] Registered Extension: ${ext.name}`);
             // Simulate node creation
-            ext.nodeCreated(mockNode, mockApp);
+            ext.nodeCreated?.(mockNode, mockApp);
         }
     };
 
     // We need to dynamically import main.ts or extract the logic
     // For now, let's just expose the mockNode globally so we can test components directly
-    (window as any).mockNode = mockNode;
+    window.mockNode = mockNode;
 }
 
 initDev();

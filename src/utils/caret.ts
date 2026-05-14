@@ -50,8 +50,8 @@ export function getCaretCoordinates(element: HTMLTextAreaElement, position: numb
     style.position = 'absolute';
     style.visibility = 'hidden';
 
-    properties.forEach((prop: any) => {
-        style[prop] = computed[prop];
+    properties.forEach((prop) => {
+        style.setProperty(prop, computed.getPropertyValue(prop));
     });
 
     if (navigator.userAgent.toLowerCase().indexOf('firefox') > -1) {

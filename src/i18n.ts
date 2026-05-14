@@ -14,8 +14,8 @@ const getInitialLocale = () => {
     }
 
     // 2. Check ComfyUI Setting
-    if ((window as any).app?.ui?.settings) {
-        const comfyLang = (window as any).app.ui.settings.getSettingValue("Comfy.lang", "");
+    if (window.app?.ui?.settings) {
+        const comfyLang = window.app.ui.settings.getSettingValue<string>("Comfy.lang", "");
         if (comfyLang) {
             if (comfyLang.startsWith('zh')) return 'zh-CN';
             return 'en';
