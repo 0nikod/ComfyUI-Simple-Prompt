@@ -4,6 +4,7 @@ import { useI18n } from 'vue-i18n';
 import { Icon } from '@iconify/vue';
 import { categoryService } from '../utils/categoryService';
 import { TagCategory } from '../utils/types';
+import { simplePromptApi } from '../api/client';
 
 const props = defineProps<{
   visible: boolean;
@@ -86,17 +87,7 @@ const handleSave = async () => {
         source: props.targetSource || 'user'
     };
 
-    const response = await fetch('/simple-prompt/add-custom-tag', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-    });
-
-    const result = await response.json();
-
-    if (!response.ok) {
-        throw new Error(result.error || response.statusText);
-    }
+    await simplePromptApi.addTag(payload);
 
     successMsg.value = props.editMode ? t('customTag.successEdited') || 'Tag updated!' : t('customTag.successAdded');
     setTimeout(() => {

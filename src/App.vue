@@ -7,6 +7,7 @@ import { CategoryService } from './utils/categoryService';
 import { settings } from './utils/settings';
 import { metaService } from './utils/metaService';
 import { textToTags, applyAutoMeta } from './utils/promptParser';
+import { simplePromptApi } from './api/client';
 
 const props = defineProps<{
     initialPrompt: string;
@@ -57,12 +58,7 @@ const saveChanges = async () => {
           let ratingTagNames: string[] = [];
           
           try {
-              const resp = await fetch('/simple-prompt/get-tags-details', {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({ names: tagNames, fast: true })
-              });
-              const categoriesMap = await resp.json();
+              const categoriesMap = await simplePromptApi.getTagsDetails(tagNames, true);
               
               // Extract rating tag names (category 7)
               ratingTagNames = tagNames.filter(name => 

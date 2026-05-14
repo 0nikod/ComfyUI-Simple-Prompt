@@ -1,5 +1,6 @@
 import { TagCategory, CATEGORY_COLORS } from './types';
 import { reactive } from 'vue';
+import { simplePromptApi } from '../api/client';
 
 export interface CategoryData {
     value: number;
@@ -51,21 +52,18 @@ export class CategoryService {
 
     public async fetchCategories(): Promise<void> {
         try {
-            const response = await fetch('/simple-prompt/categories/list');
-            if (response.ok) {
-                const data = await response.json();
+            const data = await simplePromptApi.listCategories();
 
-                if (Array.isArray(data)) {
-                    // Clear custom ones if any, but keep defaults if fetch fails next time? 
-                    // Better to just update the map.
-                    data.forEach((cat: any) => {
-                        this._categories.set(cat.id, {
-                            value: cat.id,
-                            label: cat.name,
-                            color: cat.color
-                        });
+            if (Array.isArray(data)) {
+                // Clear custom ones if any, but keep defaults if fetch fails next time? 
+                // Better to just update the map.
+                data.forEach((cat) => {
+                    this._categories.set(cat.id, {
+                        value: cat.id,
+                        label: cat.name,
+                        color: cat.color
                     });
-                }
+                });
             }
         } catch (error) {
             console.error("[CategoryService] Failed to fetch categories:", error);
@@ -76,19 +74,9 @@ export class CategoryService {
 
     public async saveCustomCategories(categories: CategoryItem[]): Promise<void> {
         try {
-            const response = await fetch('/simple-prompt/categories/save', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ categories })
-            });
-
-            if (response.ok) {
-                // Refresh local state after save
-                await this.fetchCategories();
-            } else {
-                console.error("[CategoryService] Failed to save categories:", await response.text());
-                throw new Error("Failed to save categories");
-            }
+            await simplePromptApi.saveCategories(categories);
+            // Refresh local state after save
+            await this.fetchCategories();
         } catch (error) {
             console.error("[CategoryService] Error saving categories:", error);
             throw error;

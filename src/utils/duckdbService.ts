@@ -1,3 +1,6 @@
+import { simplePromptApi } from '../api/client';
+import type { TagRecord } from '../api/types';
+
 export class DuckDBService {
     private static instance: DuckDBService;
     private isInitialized = false;
@@ -20,24 +23,13 @@ export class DuckDBService {
 
 
 
-    public async searchTags(query: string, limit: number = 20, useAliases: boolean = false, categories: number[] = []): Promise<any[]> {
-        const params = new URLSearchParams({
-            q: query,
-            limit: limit.toString(),
-            use_aliases: useAliases.toString(),
-            categories: categories.join(',')
-        });
-
+    public async searchTags(query: string, limit: number = 20, useAliases: boolean = false, categories: number[] = []): Promise<TagRecord[]> {
         try {
-            const response = await fetch(`/simple-prompt/search-tags?${params.toString()}`);
-            if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
-            }
-            const results = await response.json();
+            const results = await simplePromptApi.searchTags(query, limit, useAliases, categories);
 
             // Handle the same alias matching logic as before for UI highlighting
             if (useAliases && results.length > 0) {
-                return results.map((row: any) => {
+                return results.map((row) => {
                     const nameMatches = row.name && row.name.toLowerCase().includes(query.toLowerCase());
 
                     // If name matches, it's a direct match
@@ -68,22 +60,11 @@ export class DuckDBService {
         }
     }
 
-    public async getTagsDetails(names: string[]): Promise<Record<string, number>> {
+    public async getTagsDetails(names: string[], fast = false): Promise<Record<string, number>> {
         if (names.length === 0) return {};
 
         try {
-            const response = await fetch('/simple-prompt/get-tags-details', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({ names })
-            });
-
-            if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
-            }
-            return await response.json();
+            return await simplePromptApi.getTagsDetails(names, fast);
         } catch (error) {
             console.error("[DuckDB] Get tags details failed:", error);
             return {};

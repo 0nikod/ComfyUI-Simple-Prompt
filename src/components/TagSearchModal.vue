@@ -4,6 +4,8 @@ import { useI18n } from 'vue-i18n';
 import { Icon } from '@iconify/vue';
 import { DuckDBService } from '../utils/duckdbService';
 import { CategoryService } from '../utils/categoryService';
+import { simplePromptApi } from '../api/client';
+import type { TagRecord } from '../api/types';
 
 const props = defineProps<{
   visible: boolean;
@@ -17,7 +19,7 @@ const emit = defineEmits<{
 }>();
 
 const searchQuery = ref('');
-const searchResults = ref<any[]>([]);
+const searchResults = ref<TagRecord[]>([]);
 const loading = ref(false);
 const selectedCategories = ref<number[]>([]);
 
@@ -89,7 +91,7 @@ const handleSearchInput = () => {
 };
 
 // Add tag to prompt
-const addTag = (tag: any) => {
+const addTag = (tag: TagRecord) => {
   emit('add-tag', tag.name, tag.category);
 };
 
@@ -158,11 +160,11 @@ const getHighlightParts = (text: string, query: string): Array<{ text: string; m
 };
 
 // --- Like Functionality ---
-const isLiked = (tag: any) => {
+const isLiked = (tag: TagRecord) => {
     return tag.priority === 1; // 1 = Liked source
 };
 
-const toggleLike = async (tag: any, event: Event) => {
+const toggleLike = async (tag: TagRecord, event: Event) => {
     event.stopPropagation();
     
     const currentlyLiked = isLiked(tag);
@@ -178,11 +180,7 @@ const toggleLike = async (tag: any, event: Event) => {
             alias: tag.alias
         };
         
-        await fetch('/simple-prompt/toggle-like-tag', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload)
-        });
+        await simplePromptApi.toggleLikeTag(payload);
         // Success - no undo needed
         
         // Re-search to sort correctly if needed? 

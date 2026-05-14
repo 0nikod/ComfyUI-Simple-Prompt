@@ -1,11 +1,13 @@
 import { ref } from 'vue';
+import { simplePromptApi } from '../api/client';
+import type { PresetRecord } from '../api/types';
 
 class MetaService {
     private static instance: MetaService;
     // Preset support
-    public presets = ref<any[]>([]); // { id, name, tags }
-    public defaultPresets = ref<any[]>([]);
-    public customPresets = ref<any[]>([]);
+    public presets = ref<PresetRecord[]>([]);
+    public defaultPresets = ref<PresetRecord[]>([]);
+    public customPresets = ref<PresetRecord[]>([]);
     public activePresetId = ref<string>('');
 
     public loading = ref(false);
@@ -24,35 +26,27 @@ class MetaService {
 
     public async fetchPresets() {
         try {
-            const response = await fetch('/simple-prompt/presets/list');
-            if (response.ok) {
-                const data = await response.json();
-                this.defaultPresets.value = data.defaults || [];
-                this.customPresets.value = data.customs || [];
+            const data = await simplePromptApi.listPresets();
+            this.defaultPresets.value = data.defaults || [];
+            this.customPresets.value = data.customs || [];
 
-                // Merge
-                this.presets.value = [...this.defaultPresets.value, ...this.customPresets.value];
+            // Merge
+            this.presets.value = [...this.defaultPresets.value, ...this.customPresets.value];
 
-                // Restore active preset logic or default to first if none
-                if (!this.activePresetId.value && this.presets.value.length > 0) {
-                    // Check storage?
-                    // For now default to first
-                    this.activePresetId.value = this.presets.value[0].id;
-                }
+            // Restore active preset logic or default to first if none
+            if (!this.activePresetId.value && this.presets.value.length > 0) {
+                // Check storage?
+                // For now default to first
+                this.activePresetId.value = this.presets.value[0].id;
             }
         } catch (e) {
             console.error("Error fetching presets:", e);
         }
     }
 
-    public async saveCustomPresets(customs: any[]) {
+    public async saveCustomPresets(customs: PresetRecord[]) {
         try {
-            const response = await fetch('/simple-prompt/presets/save', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ presets: customs })
-            });
-            if (!response.ok) throw new Error("Failed");
+            await simplePromptApi.savePresets(customs);
             await this.fetchPresets();
         } catch (e) {
             console.error("Error saving presets:", e);

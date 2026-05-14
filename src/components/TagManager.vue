@@ -4,8 +4,9 @@ import { Icon } from '@iconify/vue';
 import { useI18n } from 'vue-i18n';
 import CustomTagModal from './CustomTagModal.vue';
 import { settings } from '../utils/settings';
-import { type TagCategory, CATEGORY_COLORS } from '../utils/types'; // Keep for now if used, but prefer service
 import { categoryService } from '../utils/categoryService';
+import { simplePromptApi } from '../api/client';
+import type { TagRecord } from '../api/types';
 
 const { t } = useI18n();
 
@@ -18,7 +19,7 @@ const tabs = computed(() => [
 ]);
 
 // Data
-const tags = ref<any[]>([]);
+const tags = ref<TagRecord[]>([]);
 const totalTags = ref(0);
 const loading = ref(false);
 const searchQuery = ref('');
@@ -27,29 +28,16 @@ const pageSize = 20;
 
 // Edit Modal
 const showEditModal = ref(false);
-const editingTag = ref<any>(null);
+const editingTag = ref<TagRecord | null>(null);
 
 // Fetch Tags
 const fetchTags = async () => {
     loading.value = true;
     try {
         const offset = (currentPage.value - 1) * pageSize;
-        const params = new URLSearchParams({
-            source: activeTab.value,
-            limit: pageSize.toString(),
-            offset: offset.toString(),
-            q: searchQuery.value
-        });
-        
-        const response = await fetch(`/simple-prompt/tags/list?${params.toString()}`);
-        const result = await response.json();
-        
-        if (response.ok) {
-            tags.value = result.data || [];
-            totalTags.value = result.total || 0;
-        } else {
-            console.error('Fetch tags failed:', result.error);
-        }
+        const result = await simplePromptApi.listTags(activeTab.value, pageSize, offset, searchQuery.value);
+        tags.value = result.data || [];
+        totalTags.value = result.total || 0;
     } catch (e) {
         console.error('Fetch tags error:', e);
     } finally {
@@ -58,28 +46,18 @@ const fetchTags = async () => {
 };
 
 // Actions
-const handleDelete = async (tag: any) => {
+const handleDelete = async (tag: TagRecord) => {
     if (!confirm(t('common.confirm') + ` Delete '${tag.name}'?`)) return;
     
     try {
-        const response = await fetch('/simple-prompt/tags/delete', {
-            method: 'DELETE',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ name: tag.name, source: activeTab.value })
-        });
-        
-        if (response.ok) {
-            fetchTags();
-        } else {
-            const res = await response.json();
-            alert('Delete failed: ' + res.error);
-        }
+        await simplePromptApi.deleteTag(tag.name, activeTab.value);
+        fetchTags();
     } catch (e: any) {
         alert('Delete failed: ' + e.message);
     }
 };
 
-const handleEdit = (tag: any) => {
+const handleEdit = (tag: TagRecord) => {
     editingTag.value = tag;
     showEditModal.value = true;
 };
@@ -134,21 +112,10 @@ const handleInlineAdd = async () => {
             source: activeTab.value
         }));
 
-        const response = await fetch('/simple-prompt/add-custom-tag', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ tags: tagsPayload })
-        });
-        
-        const res = await response.json();
-
-        if (response.ok) {
-            newTagName.value = '';
-            fetchTags();
-            // Show toast or alert? Just clean input is standard.
-        } else {
-            alert('Add failed: ' + res.error);
-        }
+        await simplePromptApi.addTags(tagsPayload);
+        newTagName.value = '';
+        fetchTags();
+        // Show toast or alert? Just clean input is standard.
     } catch (e: any) {
         alert('Add failed: ' + e.message);
     } finally {

@@ -6,6 +6,7 @@ import { settings } from '../utils/settings';
 import TagManager from './TagManager.vue';
 import { categoryService, type CategoryItem } from '../utils/categoryService';
 import { metaService } from '../utils/metaService';
+import { simplePromptApi } from '../api/client';
 
 const props = defineProps({
   visible: {
@@ -169,12 +170,7 @@ const handleDataUpdate = async (action: 'update_github' | 'update_liked' | 'upda
             updateStatus.value = t('settings.items.checkingUpdate');
             
             try {
-                const checkResponse = await fetch('/simple-prompt/check-update');
-                const checkResult = await checkResponse.json();
-                
-                if (!checkResponse.ok) {
-                    throw new Error(checkResult.error || checkResponse.statusText);
-                }
+                const checkResult = await simplePromptApi.checkUpdate();
 
                 latestVersion.value = checkResult.version;
                 isChecking.value = false;
@@ -186,19 +182,12 @@ const handleDataUpdate = async (action: 'update_github' | 'update_liked' | 'upda
 
                 // 2. Proceed to update if available
                 updateStatus.value = t('settings.items.updating');
+                const updateResult = await simplePromptApi.updateTags();
                 
-                const updateResponse = await fetch('/simple-prompt/update-tags', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({})
-                });
-                
-                const updateResult = await updateResponse.json();
-                
-                if (updateResponse.ok && updateResult.status === 'success') {
+                if (updateResult.status === 'success') {
                     updateStatus.value = t('settings.items.updateSuccess');
                 } else {
-                    throw new Error(updateResult.error || updateResponse.statusText);
+                    throw new Error(updateResult.message || 'Update failed');
                 }
             } finally {
                 isChecking.value = false; // ensure check flag cleared
@@ -207,21 +196,12 @@ const handleDataUpdate = async (action: 'update_github' | 'update_liked' | 'upda
         else {
             // Local Data Update (Liked or User)
             updateStatus.value = t('settings.items.updating');
-            const endpoint = '/simple-prompt/update-data';
-            const payload = { action }; // 'update_liked' or 'update_user'
+            const result = await simplePromptApi.updateData(action);
             
-            const response = await fetch(endpoint, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload)
-            });
-            
-            const result = await response.json();
-            
-            if (response.ok && result.status === 'success') {
+            if (result.status === 'success') {
                 updateStatus.value = result.message || t('settings.items.updateSuccess');
             } else {
-                throw new Error(result.error || response.statusText);
+                throw new Error(result.message || 'Update failed');
             }
         }
 
