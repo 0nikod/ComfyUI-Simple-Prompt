@@ -6,7 +6,7 @@ import { settings } from '../utils/settings';
 import TagManager from './TagManager.vue';
 import { categoryService, type CategoryItem } from '../utils/categoryService';
 import { metaService } from '../utils/metaService';
-import { simplePromptApi } from '../api/client';
+import { useDataUpdateActions } from '../composables/useDataUpdateActions';
 
 const props = defineProps({
   visible: {
@@ -150,73 +150,11 @@ const resetPresetForm = () => {
     editingPresetId.value = null;
 };
 
-// Update logic
-const updateStatus = ref('');
-const isUpdating = ref(false);
-const isChecking = ref(false);
-const latestVersion = ref('');
-
-// Generic Data Update Handler
-const handleDataUpdate = async (action: 'update_github' | 'update_liked' | 'update_user') => {
-    if (isUpdating.value || isChecking.value) return;
-    
-    isUpdating.value = true;
-    updateStatus.value = '';
-    
-    try {
-        if (action === 'update_github') {
-             // 1. Check for updates first
-            isChecking.value = true;
-            updateStatus.value = t('settings.items.checkingUpdate');
-            
-            try {
-                const checkResult = await simplePromptApi.checkUpdate();
-
-                latestVersion.value = checkResult.version;
-                isChecking.value = false;
-
-                if (!checkResult.update_available) {
-                    updateStatus.value = t('settings.items.upToDate') + latestVersion.value;
-                    return;
-                }
-
-                // 2. Proceed to update if available
-                updateStatus.value = t('settings.items.updating');
-                const updateResult = await simplePromptApi.updateTags();
-                
-                if (updateResult.status === 'success') {
-                    updateStatus.value = t('settings.items.updateSuccess');
-                } else {
-                    throw new Error(updateResult.message || 'Update failed');
-                }
-            } finally {
-                isChecking.value = false; // ensure check flag cleared
-            }
-        } 
-        else {
-            // Local Data Update (Liked or User)
-            updateStatus.value = t('settings.items.updating');
-            const result = await simplePromptApi.updateData(action);
-            
-            if (result.status === 'success') {
-                updateStatus.value = result.message || t('settings.items.updateSuccess');
-            } else {
-                throw new Error(result.message || 'Update failed');
-            }
-        }
-
-    } catch (error: any) {
-        console.error('Update action error:', error);
-        updateStatus.value = t('settings.items.updateError') + error.message;
-    } finally {
-        isUpdating.value = false;
-    }
-};
+const { updateStatus, isUpdating, isChecking, latestVersion, resetUpdateStatus, handleDataUpdate } = useDataUpdateActions(t);
 
 watch(() => props.visible, (newVal) => {
   if (newVal) {
-    updateStatus.value = '';
-    latestVersion.value = '';
+    resetUpdateStatus();
   }
 });
 </script>
