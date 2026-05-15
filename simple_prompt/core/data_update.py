@@ -18,6 +18,7 @@ logger = logging.getLogger("SimplePrompt")
 DEFAULT_RELEASE_URL = "https://api.github.com/repos/0nikod/danbooru_tag_process/releases/latest"
 ALLOWED_RELEASE_HOSTS = {"api.github.com"}
 ALLOWED_ASSET_HOSTS = {"github.com", "objects.githubusercontent.com"}
+ALLOWED_ASSET_HOST_SUFFIXES = (".githubusercontent.com",)
 MAX_TAG_DOWNLOAD_BYTES = 512 * 1024 * 1024
 DOWNLOAD_CHUNK_SIZE = 1024 * 1024
 TAG_ASSET_NAMES = ["tags_processed.parquet", "tags.parquet"]
@@ -175,7 +176,7 @@ def _extract_remote_sha256(asset: Dict[str, Any]) -> str:
 
 def _validate_release_url(url: str) -> str:
     parsed = urlparse(url)
-    if parsed.scheme != "https" or parsed.netloc not in ALLOWED_RELEASE_HOSTS:
+    if parsed.scheme != "https" or parsed.hostname not in ALLOWED_RELEASE_HOSTS:
         raise ValueError("Unsupported release URL")
     if not parsed.path.startswith("/repos/0nikod/danbooru_tag_process/releases/"):
         raise ValueError("Unsupported release URL")
@@ -184,7 +185,7 @@ def _validate_release_url(url: str) -> str:
 
 def _validate_asset_url(url: str) -> str:
     parsed = urlparse(url)
-    if parsed.scheme != "https" or parsed.netloc not in ALLOWED_ASSET_HOSTS:
+    if parsed.scheme != "https" or not _is_allowed_asset_host(parsed.hostname):
         raise ValueError("Unsupported asset URL")
     return url
 
@@ -199,8 +200,8 @@ async def _download_tag_asset(session: Any, download_url: str, temp_path: str) -
         if resp.status != 200:
             raise RuntimeError(f"Failed to download: {resp.status}")
 
-        final_host = urlparse(str(resp.url)).netloc
-        if final_host not in ALLOWED_ASSET_HOSTS:
+        final_host = urlparse(str(resp.url)).hostname
+        if not _is_allowed_asset_host(final_host):
             raise ValueError("Unsupported asset redirect URL")
 
         with open(temp_path, "wb") as f:
@@ -212,6 +213,16 @@ async def _download_tag_asset(session: Any, download_url: str, temp_path: str) -
                 f.write(chunk)
 
     return sha256_hash.hexdigest()
+
+
+def _is_allowed_asset_host(hostname: Optional[str]) -> bool:
+    if not hostname:
+        return False
+
+    if hostname in ALLOWED_ASSET_HOSTS:
+        return True
+
+    return any(hostname.endswith(suffix) for suffix in ALLOWED_ASSET_HOST_SUFFIXES)
 
 
 def _validate_parquet_file(path: str) -> None:

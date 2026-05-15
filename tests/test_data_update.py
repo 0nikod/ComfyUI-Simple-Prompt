@@ -20,6 +20,9 @@ def test_validate_asset_url_allows_only_github_asset_hosts():
     valid_url = "https://github.com/0nikod/danbooru_tag_process/releases/download/v1/tags.parquet"
     assert data_update._validate_asset_url(valid_url) == valid_url
 
+    redirected_url = "https://release-assets.githubusercontent.com/github-production-release-asset/test/tags.parquet"
+    assert data_update._validate_asset_url(redirected_url) == redirected_url
+
     with pytest.raises(ValueError, match="Unsupported asset URL"):
         data_update._validate_asset_url("https://example.com/tags.parquet")
 
