@@ -7,6 +7,7 @@ import { CategoryService } from './utils/categoryService';
 import { settings } from './utils/settings';
 import { metaService } from './utils/metaService';
 import { textToTags, applyAutoMeta } from './utils/promptParser';
+import { normalizeTagForRecognition } from './utils/tagRecognition';
 import { simplePromptApi } from './api/client';
 
 const props = defineProps<{
@@ -53,23 +54,28 @@ const saveChanges = async () => {
           // Get all tag names from prompt to identify ratings
           const tags = textToTags(finalPrompt);
           const tagNames = tags.map(t => t.text);
+          const recognitionTagNames = tagNames.map((name) =>
+              normalizeTagForRecognition(name, settings.ignoreAtPrefixForRecognition)
+          );
           
           // Fetch categories to identify rating tags
           let ratingTagNames: string[] = [];
           
           try {
-              const categoriesMap = await simplePromptApi.getTagsDetails(tagNames, true);
+              const categoriesMap = await simplePromptApi.getTagsDetails(recognitionTagNames, true);
               
               // Extract rating tag names (category 7)
-              ratingTagNames = tagNames.filter(name => 
-                  categoriesMap[name.toLowerCase()] === 7
+              ratingTagNames = tagNames.filter((name, index) =>
+                  categoriesMap[recognitionTagNames[index].toLowerCase()] === 7
               );
           } catch (e) {
               console.error("Failed to fetch tag categories:", e);
           }
           
           // Apply auto meta with minimal changes
-          finalPrompt = applyAutoMeta(finalPrompt, metas, ratingTagNames);
+          finalPrompt = applyAutoMeta(finalPrompt, metas, ratingTagNames, {
+              ignoreAtPrefixForRecognition: settings.ignoreAtPrefixForRecognition,
+          });
       }
   }
 

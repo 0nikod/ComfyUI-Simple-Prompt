@@ -4,6 +4,7 @@ import { useI18n } from 'vue-i18n';
 import { DuckDBService } from '../utils/duckdbService';
 import { settings } from '../utils/settings';
 import { getCaretCoordinates } from '../utils/caret';
+import { normalizeTagForRecognition } from '../utils/tagRecognition';
 import AutocompleteList from './AutocompleteList.vue';
 import VisualTagArea from './VisualTagArea.vue';
 import OtherFunctions from './OtherFunctions.vue';
@@ -180,6 +181,17 @@ const checkAutocomplete = async (el: HTMLTextAreaElement) => {
     
     if (match) {
         const query = match[1];
+        const searchQuery = normalizeTagForRecognition(query, settings.ignoreAtPrefixForRecognition);
+        if (!searchQuery || searchQuery.length < 2) {
+            autocompleteRequestToken++;
+            showAutocomplete.value = false;
+            searchResults.value = [];
+            selectedIndex.value = 0;
+            currentQuery.value = '';
+            loading.value = false;
+            return;
+        }
+
         const requestToken = ++autocompleteRequestToken;
         currentQuery.value = query;
         queryStartPos.value = match.index;
@@ -196,9 +208,9 @@ const checkAutocomplete = async (el: HTMLTextAreaElement) => {
         showAutocomplete.value = true;
         
         try {
-            console.log(`[Autocomplete] Searching for: "${query}"`);
+            console.log(`[Autocomplete] Searching for: "${searchQuery}"`);
             const db = DuckDBService.getInstance();
-            const results = await db.searchTags(query, 20, settings.useAliasesInAutocomplete);
+            const results = await db.searchTags(searchQuery, 20, settings.useAliasesInAutocomplete);
 
             if (requestToken !== autocompleteRequestToken) return;
             searchResults.value = results;

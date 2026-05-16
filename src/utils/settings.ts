@@ -5,6 +5,7 @@ export interface UserSettings {
     escapeBrackets: boolean;
     useAliasesInSearch: boolean;
     useAliasesInAutocomplete: boolean;
+    ignoreAtPrefixForRecognition: boolean;
     smartBackspace: boolean;
     language: 'en' | 'zh-CN';
     allowEditDefaultTags: boolean;
@@ -19,6 +20,7 @@ const defaultSettings: UserSettings = {
     escapeBrackets: false,
     useAliasesInSearch: true,
     useAliasesInAutocomplete: false, // Default false as per new spec
+    ignoreAtPrefixForRecognition: false,
     smartBackspace: false, // Default false - user must opt-in
     language: 'en', // Default fallback
     allowEditDefaultTags: false,

@@ -4,6 +4,8 @@ import { useI18n } from 'vue-i18n';
 import { Icon } from '@iconify/vue';
 import { DuckDBService } from '../utils/duckdbService';
 import { CategoryService } from '../utils/categoryService';
+import { settings } from '../utils/settings';
+import { normalizeTagForRecognition } from '../utils/tagRecognition';
 import { simplePromptApi } from '../api/client';
 import type { TagRecord } from '../api/types';
 
@@ -22,6 +24,10 @@ const searchQuery = ref('');
 const searchResults = ref<TagRecord[]>([]);
 const loading = ref(false);
 const selectedCategories = ref<number[]>([]);
+const recognitionSearchQuery = computed(() => normalizeTagForRecognition(
+  searchQuery.value,
+  settings.ignoreAtPrefixForRecognition,
+));
 
 // Category options
 const categoryOptions = computed(() => {
@@ -58,7 +64,7 @@ const isCategorySelected = (category: number) => {
 
 // Perform search
 const performSearch = async () => {
-  const query = searchQuery.value.trim();
+  const query = recognitionSearchQuery.value;
   if (!query || query.length < 2) {
     searchResults.value = [];
     return;
@@ -276,8 +282,8 @@ const toggleLike = async (tag: TagRecord, event: Event) => {
                   <span class="category-indicator"></span>
                   <span class="tag-name">
                     <span v-if="!tag.matched_alias">
-                      <span
-                        v-for="(part, idx) in getHighlightParts(tag.name, searchQuery)"
+                        <span
+                        v-for="(part, idx) in getHighlightParts(tag.name, recognitionSearchQuery)"
                         :key="`name-${tag.name}-${idx}`"
                         :class="{ 'match-bold': part.match }"
                       >{{ part.text }}</span>
@@ -285,14 +291,14 @@ const toggleLike = async (tag: TagRecord, event: Event) => {
                     <template v-else>
                       <span>
                         <span
-                          v-for="(part, idx) in getHighlightParts(tag.name, searchQuery)"
+                          v-for="(part, idx) in getHighlightParts(tag.name, recognitionSearchQuery)"
                           :key="`name-alias-${tag.name}-${idx}`"
                           :class="{ 'match-bold': part.match }"
                         >{{ part.text }}</span>
                       </span>
                       <span class="alias-indicator">
                         <span
-                          v-for="(part, idx) in getHighlightParts(tag.matched_alias, searchQuery)"
+                          v-for="(part, idx) in getHighlightParts(tag.matched_alias, recognitionSearchQuery)"
                           :key="`alias-${tag.name}-${idx}`"
                           :class="{ 'match-bold': part.match }"
                         >{{ part.text }}</span>

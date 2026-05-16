@@ -29,6 +29,8 @@
       "useAliasSearchDesc": "Match tag aliases when searching",
       "useAliasAutocomplete": "Use Aliases in Autocomplete",
       "useAliasAutocompleteDesc": "Match aliases in autocomplete (may impact performance)",
+      "ignoreAtPrefix": "Ignore {'@'} Prefix for Recognition",
+      "ignoreAtPrefixDesc": "Recognize {'@'}abc as abc for search and tag metadata while keeping {'@'}abc in the prompt",
       "smartBackspace": "Smart Backspace",
       "smartBackspaceDesc": "When deleting the last character of a tag, also remove preceding comma and space",
       "language": "Language",

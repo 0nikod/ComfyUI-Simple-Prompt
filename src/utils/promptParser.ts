@@ -1,5 +1,6 @@
 import type { TagItem } from './types';
 import { TagCategory } from './types';
+import { normalizeTagForRecognition } from './tagRecognition';
 
 interface PromptTagRange {
     text: string;
@@ -274,18 +275,21 @@ export function formatGroupedTags(tagsList: TagItem[]): string {
 export function applyAutoMeta(
     text: string,
     metaTags: string[],
-    ratingTagNames: string[]
+    ratingTagNames: string[],
+    options: { ignoreAtPrefixForRecognition?: boolean } = {}
 ): string {
     if (!metaTags.length) return text;
 
-    const metaLower = new Set(metaTags.map(t => t.toLowerCase()));
-    const ratingLower = new Set(ratingTagNames.map(t => t.toLowerCase()));
+    const ignoreAtPrefix = options.ignoreAtPrefixForRecognition ?? false;
+    const normalize = (tagName: string) => normalizeTagForRecognition(tagName, ignoreAtPrefix).toLowerCase();
+    const metaLower = new Set(metaTags.map(normalize));
+    const ratingLower = new Set(ratingTagNames.map(normalize));
     const foundTags = parsePromptTagRanges(text);
     const metaToRemove: PromptTagRange[] = [];
     const existingMetaWeights = new Map<string, number>();
 
     for (const tag of foundTags) {
-        const lower = tag.text.toLowerCase();
+        const lower = normalize(tag.text);
         if (metaLower.has(lower)) {
             metaToRemove.push(tag);
             existingMetaWeights.set(lower, tag.weight);
@@ -293,8 +297,8 @@ export function applyAutoMeta(
     }
 
     const withoutOldMeta = removeTagRanges(text, metaToRemove);
-    const metaBlock = buildMetaBlock(metaTags, existingMetaWeights);
-    const insertIndex = findFirstRatingIndex(withoutOldMeta, ratingTagNames, ratingLower);
+    const metaBlock = buildMetaBlock(metaTags, existingMetaWeights, normalize);
+    const insertIndex = findFirstRatingIndex(withoutOldMeta, ratingTagNames, ratingLower, normalize);
 
     return insertBlock(withoutOldMeta, insertIndex, metaBlock);
 }
@@ -422,9 +426,13 @@ function removeTagRanges(text: string, ranges: PromptTagRange[]): string {
         .replace(/\n\s*,/g, '\n');
 }
 
-function buildMetaBlock(metaTags: string[], existingMetaWeights: Map<string, number>): string {
+function buildMetaBlock(
+    metaTags: string[],
+    existingMetaWeights: Map<string, number>,
+    normalize: (tagName: string) => string
+): string {
     return metaTags.map(m => {
-        const weight = existingMetaWeights.get(m.toLowerCase()) || 1.0;
+        const weight = existingMetaWeights.get(normalize(m)) || 1.0;
         const escaped = m.replace(/\(/g, '\\(').replace(/\)/g, '\\)');
         if (weight !== 1.0) {
             return `(${escaped}:${weight.toFixed(1)})`;
@@ -433,12 +441,17 @@ function buildMetaBlock(metaTags: string[], existingMetaWeights: Map<string, num
     }).join(', ') + ',';
 }
 
-function findFirstRatingIndex(text: string, ratingTagNames: string[], ratingLower: Set<string>): number {
+function findFirstRatingIndex(
+    text: string,
+    ratingTagNames: string[],
+    ratingLower: Set<string>,
+    normalize: (tagName: string) => string
+): number {
     const modifiedTags = textToTags(text);
     let insertIndex = text.length;
 
     for (let idx = 0; idx < modifiedTags.length; idx++) {
-        const lower = modifiedTags[idx].text.toLowerCase();
+        const lower = normalize(modifiedTags[idx].text);
         if (ratingLower.has(lower)) {
             for (const ratingName of ratingTagNames) {
                 const escaped = escapeRegExp(ratingName);

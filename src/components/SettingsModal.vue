@@ -163,6 +163,17 @@ watch(() => props.visible, (newVal) => {
                   <span class="slider"></span>
                 </label>
               </div>
+
+              <div class="setting-item">
+                <div class="setting-info">
+                  <label class="setting-label">{{ t('settings.items.ignoreAtPrefix') }}</label>
+                  <p class="setting-desc">{{ t('settings.items.ignoreAtPrefixDesc') }}</p>
+                </div>
+                <label class="switch">
+                  <input type="checkbox" v-model="settings.ignoreAtPrefixForRecognition">
+                  <span class="slider"></span>
+                </label>
+              </div>
             </div>
 
             <!-- Section 3: Editing Behavior -->

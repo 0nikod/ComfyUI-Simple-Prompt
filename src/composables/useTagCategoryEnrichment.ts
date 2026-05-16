@@ -1,6 +1,8 @@
 import type { Ref } from 'vue';
 import { ref } from 'vue';
 import { DuckDBService } from '../utils/duckdbService';
+import { settings } from '../utils/settings';
+import { normalizeTagForRecognition } from '../utils/tagRecognition';
 import type { TagItem } from '../utils/types';
 
 const CATEGORY_FETCH_DEBOUNCE_MS = 1000;
@@ -11,15 +13,20 @@ export function useTagCategoryEnrichment(tags: Ref<TagItem[]>) {
     const fetchQueue = new Set<string>();
     let fetchTimeout: ReturnType<typeof setTimeout> | null = null;
 
+    const getRecognitionKey = (tagName: string) => normalizeTagForRecognition(
+        tagName,
+        settings.ignoreAtPrefixForRecognition,
+    ).toLowerCase();
+
     const cacheTagCategory = (tagName: string, category?: number) => {
         if (category !== undefined) {
-            categoryCache.value[tagName.toLowerCase()] = category;
+            categoryCache.value[getRecognitionKey(tagName)] = category;
         }
     };
 
     const applyCacheToTags = (targetTags: TagItem[]): TagItem[] => {
         return targetTags.map((tag) => {
-            const category = categoryCache.value[tag.text.toLowerCase()];
+            const category = categoryCache.value[getRecognitionKey(tag.text)];
             return category !== undefined ? { ...tag, category } : tag;
         });
     };
@@ -32,11 +39,11 @@ export function useTagCategoryEnrichment(tags: Ref<TagItem[]>) {
             const results = await db.getTagsDetails(names);
 
             Object.entries(results).forEach(([name, category]) => {
-                categoryCache.value[name.toLowerCase()] = category;
+                categoryCache.value[getRecognitionKey(name)] = category;
             });
 
             names.forEach((name) => {
-                const lower = name.toLowerCase();
+                const lower = getRecognitionKey(name);
                 if (categoryCache.value[lower] === undefined) {
                     categoryCache.value[lower] = DEFAULT_CATEGORY;
                 }
@@ -64,12 +71,15 @@ export function useTagCategoryEnrichment(tags: Ref<TagItem[]>) {
 
     const enrichTags = (rawTags: TagItem[]): TagItem[] => {
         const enriched = rawTags.map((tag) => {
-            const category = categoryCache.value[tag.text.toLowerCase()];
+            const recognitionName = normalizeTagForRecognition(tag.text, settings.ignoreAtPrefixForRecognition);
+            const category = categoryCache.value[recognitionName.toLowerCase()];
             if (category !== undefined) {
                 return { ...tag, category };
             }
 
-            fetchQueue.add(tag.text);
+            if (recognitionName) {
+                fetchQueue.add(recognitionName);
+            }
             return tag;
         });
 
